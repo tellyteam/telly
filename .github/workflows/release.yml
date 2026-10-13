@@ -1,0 +1,51 @@
+# Push a tag like v1.2.3 to build, test, sign and publish telly.apk as a GitHub Release.
+# The "latest" download link (https://github.com/tellyteam/telly/releases/latest/download/telly.apk)
+# then always serves the newest version, which is what the Downloader code points at.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Restore the signing key
+        env:
+          TELLY_KEYSTORE_BASE64: ${{ secrets.TELLY_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$TELLY_KEYSTORE_BASE64" || { echo "TELLY_KEYSTORE_BASE64 secret is missing"; exit 1; }
+          echo "$TELLY_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/telly-release.jks"
+
+      - name: Test and build
+        env:
+          TELLY_KEYSTORE_PATH: ${{ runner.temp }}/telly-release.jks
+          TELLY_KEYSTORE_PASSWORD: ${{ secrets.TELLY_KEYSTORE_PASSWORD }}
+          TELLY_KEY_ALIAS: telly
+          TELLY_KEY_PASSWORD: ${{ secrets.TELLY_KEYSTORE_PASSWORD }}
+        run: ./gradlew testDebugUnitTest assembleRelease -PtellyVersion=${GITHUB_REF_NAME}
+
+      - name: Check the APK is signed
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
+          "$APKSIGNER" verify --print-certs "$APK" | head -3
+          cp "$APK" telly.apk
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: telly.apk
+          generate_release_notes: true

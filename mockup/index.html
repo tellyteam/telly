@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>telly mockup</title>
+<style>
+  :root {
+    --bg: #151a22; --bg2: #1b2230; --surface: #1e2531; --surface2: #273041; --line: #2f3a4c;
+    --text: #e9edf2; --muted: #98a4b4; --faint: #6c788a;
+    --accent: #4fc3f7; --accent-ink: #062330; --glow: rgba(79,195,247,.45);
+    --r-card: 10px; --r-pill: 12px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #07090d; color: var(--text); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px; min-height: 100vh; }
+  .chrome { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .chrome button { background: #1c222c; color: var(--text); border: 1px solid #2a3240; border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; cursor: pointer; }
+  .chrome button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .hint { color: var(--muted); font-size: 12px; text-align: center; }
+
+  /* 1280x720 TV stage, scaled to fit */
+  .frame { width: min(1280px, 100%); aspect-ratio: 16/9; position: relative; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 8px #15181d, 0 24px 60px #000; }
+  .stage { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0;
+           background: radial-gradient(120% 90% at 70% 0%, #1f2838 0%, var(--bg) 55%, #12161d 100%); overflow: hidden; }
+  .focusable { outline: none; cursor: pointer; }
+
+  /* Nav rail */
+  .rail { position: absolute; left: 0; top: 0; bottom: 0; width: 76px; z-index: 5; padding: 28px 12px; display: flex; flex-direction: column; gap: 6px;
+          background: linear-gradient(90deg, rgba(14,18,25,.92) 0%, rgba(14,18,25,.6) 70%, transparent 100%); transition: width .2s ease; }
+  .rail:focus-within { width: 220px; background: linear-gradient(90deg, rgba(14,18,25,.97) 0%, rgba(14,18,25,.9) 75%, rgba(14,18,25,0) 100%); }
+  .wordmark { font-weight: 900; letter-spacing: -1px; font-size: 21px; color: #fff; padding: 0 3px 18px; white-space: nowrap; overflow: hidden; transition: font-size .2s, padding .2s; }
+  .rail:focus-within .wordmark { font-size: 30px; padding: 0 10px 18px; }
+  .rail .item { display: flex; align-items: center; gap: 14px; height: 44px; padding: 0 12px; border-radius: var(--r-pill); color: var(--muted); white-space: nowrap; overflow: hidden; transition: background .15s, color .15s; }
+  .rail .item svg { width: 22px; height: 22px; flex: none; }
+  .rail .item span { opacity: 0; transition: opacity .15s; }
+  .rail:focus-within .item span { opacity: 1; }
+  .rail .item.current { color: var(--text); }
+  .rail .item.current::before { content: ""; }
+  .rail .item:focus { background: rgba(79,195,247,.16); color: #fff; }
+  .rail .item.current:not(:focus) { background: rgba(255,255,255,.06); }
+  .rail .spacer { flex: 1; }
+
+  .screen { position: absolute; inset: 0; padding-left: 76px; display: none; }
+  .screen.on { display: block; }
+  .scroll { position: absolute; inset: 0 0 0 76px; overflow: hidden; scroll-behavior: smooth; }
+
+  /* Billboard */
+  .billboard { position: relative; height: 380px; }
+  /* Art fades out to the left and the bottom: two nested masks, no hard edges. */
+  .fade-x { position: absolute; right: 0; top: 0; -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 42%); mask-image: linear-gradient(90deg, transparent 0%, #000 42%); }
+  .fade-y { width: 100%; height: 100%; -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 40%); mask-image: linear-gradient(0deg, transparent 0%, #000 40%); }
+  .billboard .fade-x { width: 820px; height: 420px; }
+  .billboard .copy { position: absolute; left: 48px; top: 70px; width: 520px; }
+  .eyebrow { color: var(--accent); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; }
+  .title-xl { font-size: 44px; font-weight: 700; letter-spacing: -.5px; margin: 8px 0 6px; line-height: 1.05; }
+  .meta { color: var(--muted); font-size: 14px; display: flex; gap: 12px; align-items: center; }
+  .meta .pill { border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; font-size: 12px; }
+  .synopsis { color: #c3cbd6; font-size: 15px; margin: 12px 0 18px; max-width: 480px; }
+  .btns { display: flex; gap: 12px; }
+  .btn { height: 44px; padding: 0 22px; border-radius: var(--r-pill); display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px;
+         background: rgba(255,255,255,.08); color: var(--text); border: 1px solid rgba(255,255,255,.08); transition: transform .15s, box-shadow .15s, background .15s; }
+  .btn.primary { background: #f2f5f8; color: #111722; border-color: transparent; }
+  .btn:focus { transform: scale(1.06); box-shadow: 0 0 0 3px var(--accent), 0 0 28px var(--glow); }
+  .progress { height: 3px; background: rgba(255,255,255,.18); border-radius: 2px; overflow: hidden; }
+  .progress i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+
+  /* Rows */
+  .row { padding: 6px 0 18px; }
+  .row h3 { margin: 0 0 10px 48px; font-size: 18px; font-weight: 600; color: #dfe5ec; }
+  .track { display: flex; gap: 18px; padding: 14px 48px 22px; overflow: hidden; scroll-behavior: smooth; }
+  .card { flex: none; border-radius: var(--r-card); position: relative; transition: transform .18s ease, box-shadow .18s ease, opacity .18s; opacity: .86; }
+  .card:focus { transform: scale(1.08); opacity: 1; box-shadow: 0 0 0 3px var(--accent), 0 12px 36px rgba(0,0,0,.5), 0 0 30px var(--glow); z-index: 2; }
+  .card .art { width: 100%; height: 100%; border-radius: var(--r-card); }
+  .card .cap { position: absolute; left: 0; right: 0; top: calc(100% + 8px); font-size: 13px; color: var(--text); opacity: 0; transition: opacity .15s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card:focus .cap { opacity: 1; }
+  .landscape { width: 236px; height: 133px; }
+  .poster { width: 132px; height: 198px; }
+  .card .bar { position: absolute; left: 10px; right: 10px; bottom: 9px; }
+  .card .badge { position: absolute; top: 10px; left: 10px; font-size: 11px; padding: 2px 7px; border-radius: 5px; background: rgba(10,14,20,.72); color: var(--text); }
+  .card .ttl { position: absolute; left: 12px; right: 12px; bottom: 12px; font-weight: 700; font-size: 15px; line-height: 1.15; text-shadow: 0 1px 6px rgba(0,0,0,.6); }
+  .poster .ttl { font-size: 14px; }
+  .seeall { display: grid; place-items: center; background: rgba(255,255,255,.05); border: 1px dashed var(--line); color: var(--muted); font-size: 14px; }
+  .chan { width: 160px; height: 96px; background: #eef2f6; display: grid; place-items: center; color: #1b2433; font-weight: 800; font-size: 20px; letter-spacing: -.3px; }
+
+  .page-head { padding: 34px 48px 6px; display: flex; align-items: baseline; gap: 16px; }
+  .page-head h2 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -.3px; }
+  .page-head .sub { color: var(--muted); font-size: 14px; }
+
+  /* Detail */
+  #detail .fade-x { width: 900px; height: 520px; }
+  .detail-copy { position: absolute; left: 124px; top: 64px; width: 560px; }
+  .seasons { display: flex; gap: 10px; margin: 26px 0 0; }
+  .chip { height: 34px; padding: 0 16px; border-radius: var(--r-pill); display: inline-flex; align-items: center; font-size: 14px; color: var(--muted); background: rgba(255,255,255,.05); transition: transform .15s, box-shadow .15s; }
+  .chip.sel { color: var(--text); background: rgba(79,195,247,.16); }
+  .chip:focus { transform: scale(1.06); box-shadow: 0 0 0 2px var(--accent); color: #fff; }
+  .episodes { position: absolute; left: 76px; right: 0; top: 412px; }
+  .ep-meta { position: absolute; left: 0; right: 0; top: calc(100% + 8px); font-size: 12px; color: var(--muted); }
+  .ep-meta b { display: block; color: var(--text); font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .watched { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: 13px; font-weight: 900; }
+
+  /* Live TV: dense list */
+  .live { position: absolute; inset: 0 0 0 76px; display: grid; grid-template-columns: 230px 1fr 340px; gap: 0; }
+  .cats { padding: 30px 14px 20px 34px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid rgba(255,255,255,.04); }
+  .cats h2 { margin: 0 0 12px 10px; font-size: 22px; font-weight: 600; }
+  .cat { display: flex; justify-content: space-between; padding: 7px 12px; border-radius: 8px; color: var(--muted); font-size: 14px; transition: background .12s; }
+  .cat.sel { color: var(--text); background: rgba(255,255,255,.06); }
+  .cat:focus { background: rgba(79,195,247,.16); color: #fff; }
+  .cat span:last-child { color: var(--faint); font-size: 12px; }
+  .chlist { padding: 26px 18px 20px; overflow: hidden; display: flex; flex-direction: column; gap: 3px; }
+  .search-mini { height: 38px; border-radius: var(--r-pill); background: rgba(255,255,255,.05); color: var(--muted); display: flex; align-items: center; gap: 10px; padding: 0 16px; font-size: 14px; margin-bottom: 10px; }
+  .search-mini:focus { box-shadow: 0 0 0 2px var(--accent); color: #fff; }
+  .ch { display: grid; grid-template-columns: 38px 64px 1fr auto; align-items: center; gap: 12px; height: 46px; padding: 0 12px; border-radius: 8px; transition: background .12s, transform .12s; }
+  .ch .num { color: var(--faint); font-size: 13px; text-align: right; }
+  .ch .logo { width: 64px; height: 36px; border-radius: 6px; background: #eef2f6; color: #1b2433; display: grid; place-items: center; font-weight: 800; font-size: 11px; }
+  .ch .nm { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ch .nm small { display: block; color: var(--faint); font-size: 12px; }
+  .ch .fav { color: var(--accent); font-size: 14px; }
+  .ch:focus { background: rgba(79,195,247,.14); box-shadow: inset 0 0 0 2px var(--accent); }
+  .preview { margin: 26px 34px 20px 0; border-radius: 14px; background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); padding: 22px; display: flex; flex-direction: column; gap: 12px; }
+  .preview .big { height: 150px; border-radius: 10px; background: #eef2f6; color: #1b2433; display: grid; place-items: center; font-weight: 900; font-size: 30px; }
+  .preview h4 { margin: 4px 0 0; font-size: 20px; }
+  .np { font-size: 13px; color: var(--muted); }
+  .np b { color: var(--text); font-weight: 600; }
+  .preview .later { font-size: 11px; color: var(--faint); }
+
+  /* Search */
+  .search { position: absolute; inset: 0 0 0 76px; display: grid; grid-template-columns: 330px 1fr; }
+  .keys { padding: 34px 26px 20px 48px; }
+  .query { height: 48px; border-bottom: 2px solid var(--accent); font-size: 26px; display: flex; align-items: center; margin-bottom: 20px; letter-spacing: .5px; }
+  .query .caret { width: 2px; height: 28px; background: var(--accent); margin-left: 3px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .key { height: 38px; border-radius: 8px; display: grid; place-items: center; background: rgba(255,255,255,.05); font-size: 16px; color: #d7dde5; transition: transform .1s; }
+  .key.wide { grid-column: span 3; font-size: 13px; }
+  .key:focus { background: var(--accent); color: var(--accent-ink); transform: scale(1.08); }
+  .results { padding: 30px 0 0; overflow: hidden; }
+  .results h3 { margin: 0 0 4px 30px; font-size: 16px; color: var(--muted); font-weight: 500; }
+  .results .track { padding-left: 30px; }
+
+  /* Player */
+  .player { position: absolute; inset: 0; background: radial-gradient(90% 80% at 60% 40%, #3c5a7a 0%, #1b2b3e 45%, #070b11 100%); display: none; }
+  .player.on { display: block; }
+  .ov-top { position: absolute; left: 48px; top: 36px; }
+  .ov-top .t { font-size: 26px; font-weight: 600; }
+  .ov-top .s { color: var(--muted); font-size: 15px; }
+  .ov-bottom { position: absolute; left: 0; right: 0; bottom: 0; padding: 60px 48px 34px; background: linear-gradient(0deg, rgba(7,10,15,.9), transparent); }
+  .ov-bottom .progress { height: 4px; margin-bottom: 8px; }
+  .times { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  .ctrls { display: flex; gap: 12px; }
+  .ctrl { height: 46px; min-width: 46px; padding: 0 18px; border-radius: var(--r-pill); display: inline-flex; align-items: center; gap: 10px; background: rgba(255,255,255,.1); font-size: 14px; transition: transform .12s, box-shadow .12s; }
+  .ctrl svg { width: 20px; height: 20px; }
+  .ctrl:focus { background: #f2f5f8; color: #111722; transform: scale(1.06); box-shadow: 0 0 24px var(--glow); }
+  .side { position: absolute; top: 24px; right: 24px; bottom: 24px; width: 300px; border-radius: 14px; padding: 22px; background: rgba(20,26,36,.88); border: 1px solid rgba(255,255,255,.06); display: none; flex-direction: column; gap: 6px; }
+  .side.on { display: flex; }
+  .side h4 { margin: 0 0 10px; font-size: 18px; font-weight: 600; }
+  .opt { height: 42px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; color: #d3dae3; font-size: 14px; }
+  .opt.sel::after { content: "✓"; color: var(--accent); font-weight: 900; }
+  .opt:focus { background: rgba(79,195,247,.18); color: #fff; box-shadow: inset 0 0 0 2px var(--accent); }
+  .nextp { position: absolute; right: 24px; bottom: 140px; padding: 8px 12px; border-radius: 8px; font-size: 12px; background: rgba(16,20,24,.6); border: 1px solid var(--accent); opacity: .9; }
+  .nextp b { display: block; }
+  .player:has(.side.on) .nextp { display: none; }
+</style>
+</head>
+<body>
+  <div class="chrome" id="chrome"></div>
+  <div class="hint">Mockup with placeholder titles and art. Use the arrow keys like a remote, Enter to select, Esc to go back. Click the buttons above to jump between screens.</div>
+
+  <div class="frame" id="frame">
+    <div class="stage" id="stage">
+      <nav class="rail" id="rail">
+        <div class="wordmark">telly</div>
+      </nav>
+
+      <!-- Home -->
+      <section class="screen" id="home"><div class="scroll" id="homeScroll">
+        <div class="billboard">
+          <div class="fade-x"><div class="fade-y" style="background: linear-gradient(135deg,#6a8fd6 0%,#3c4f9c 45%,#1d2546 100%)"></div></div>
+          <div class="copy">
+            <div class="eyebrow">Continue watching</div>
+            <div class="title-xl">The Harbour</div>
+            <div class="meta"><span>Season 2 · Episode 5</span><span class="pill">15</span><span>48 min</span></div>
+            <div class="synopsis">A storm strands the ferry overnight, and Ellen finally finds out who sent the letters.</div>
+            <div style="width:300px;margin-bottom:18px"><div class="progress"><i style="width:62%"></i></div><div class="meta" style="margin-top:6px;font-size:12px">29 of 48 min</div></div>
+            <div class="btns">
+              <div class="btn primary focusable" tabindex="0" data-go="player">▶&nbsp; Resume</div>
+              <div class="btn focusable" tabindex="0" data-go="detail">More info</div>
+            </div>
+          </div>
+        </div>
+        <div id="homeRows"></div>
+      </div></section>
+
+      <!-- Films -->
+      <section class="screen" id="films"><div class="scroll">
+        <div class="page-head"><h2>Films</h2><span class="sub">Rows by category · “See all” opens the full grid</span></div>
+        <div id="filmRows"></div>
+      </div></section>
+
+      <!-- Series -->
+      <section class="screen" id="series"><div class="scroll">
+        <div class="page-head"><h2>Series</h2><span class="sub">Select a series for seasons and episodes</span></div>
+        <div id="seriesRows"></div>
+      </div></section>
+
+      <!-- Series detail -->
+      <section class="screen" id="detail">
+        <div class="fade-x"><div class="fade-y" style="background: linear-gradient(135deg,#6a8fd6 0%,#3c4f9c 45%,#1d2546 100%)"></div></div>
+        <div class="detail-copy">
+          <div class="eyebrow">Series</div>
+          <div class="title-xl" style="font-size:48px">The Harbour</div>
+          <div class="meta"><span>2024</span><span class="pill">15</span><span>2 seasons</span><span>★ 8.1</span></div>
+          <div class="synopsis">On a remote island where everyone knows everyone, a returning detective uncovers the secrets the harbour has kept for thirty years.</div>
+          <div class="btns">
+            <div class="btn primary focusable" tabindex="0" data-go="player">▶&nbsp; Resume S2:E5</div>
+            <div class="btn focusable" tabindex="0" data-toggle="mylist">＋&nbsp; My List</div>
+            <div class="btn focusable" tabindex="0" data-go="player" data-side="aspect">Aspect</div>
+          </div>
+          <div class="seasons"><div class="chip focusable" tabindex="0">Season 1</div><div class="chip sel focusable" tabindex="0">Season 2</div></div>
+        </div>
+        <div class="episodes"><div class="track" id="episodes"></div></div>
+      </section>
+
+      <!-- Live TV -->
+      <section class="screen" id="live">
+        <div class="live">
+          <div class="cats" id="cats"><h2>Live TV</h2></div>
+          <div class="chlist" id="chlist"></div>
+          <div class="preview" id="preview"></div>
+        </div>
+      </section>
+
+      <!-- Search -->
+      <section class="screen" id="search">
+        <div class="search">
+          <div class="keys">
+            <div class="query"><span id="q">har</span><span class="caret"></span></div>
+            <div class="grid" id="keys"></div>
+          </div>
+          <div class="results" id="results"></div>
+        </div>
+      </section>
+
+      <!-- Player -->
+      <div class="player" id="player">
+        <div class="ov-top"><div class="t">The Harbour</div><div class="s">S2 · E5 · “Crossing”</div></div>
+        <div class="nextp"><b>▶ Next in 42s · OK</b>E6 · The Lighthouse</div>
+        <div class="ov-bottom">
+          <div class="progress"><i style="width:62%"></i></div>
+          <div class="times"><span>29:41</span><span>−18:19</span></div>
+          <div class="ctrls">
+            <div class="ctrl focusable" tabindex="0"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg></div>
+            <div class="ctrl focusable" tabindex="0"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 5l9 7-9 7zM16 5h3v14h-3z"/></svg>Next episode</div>
+            <div class="ctrl focusable" tabindex="0" data-side="tracks"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5h16v14H4zm2 9h5v2H6zm7 0h5v2h-5zm-7-3h12v2H6z"/></svg>Audio &amp; subtitles</div>
+            <div class="ctrl focusable" tabindex="0" data-side="aspect"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 12h-2v3h-3v2h5v-5zM7 9h3V7H5v5h2V9zm14-6H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"/></svg>Aspect</div>
+          </div>
+        </div>
+        <div class="side" id="side-aspect"><h4>Aspect ratio</h4>
+          <div class="opt sel focusable" tabindex="0">Original</div><div class="opt focusable" tabindex="0">Zoom (fill)</div><div class="opt focusable" tabindex="0">Stretch</div>
+          <div class="opt focusable" tabindex="0">16:9</div><div class="opt focusable" tabindex="0">4:3</div><div class="opt focusable" tabindex="0">Custom…</div>
+          <div class="meta" style="margin-top:auto;font-size:12px">Remembered for this series</div></div>
+        <div class="side" id="side-tracks"><h4>Audio</h4>
+          <div class="opt sel focusable" tabindex="0">English · 5.1</div><div class="opt focusable" tabindex="0">English · Stereo</div>
+          <h4 style="margin-top:14px">Subtitles</h4>
+          <div class="opt sel focusable" tabindex="0">Off</div><div class="opt focusable" tabindex="0">English</div><div class="opt focusable" tabindex="0">English (SDH)</div></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ---------- placeholder content ----------
+const hue = s => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+const art = (s, a = 135) => { const h = hue(s); return `linear-gradient(${a}deg, hsl(${h} 45% 52%) 0%, hsl(${(h + 35) % 360} 50% 32%) 55%, hsl(${(h + 60) % 360} 45% 16%) 100%)`; };
+const films = ["Copper Valley", "Night Train", "Paper Moons", "The Long Field", "Signal", "Glass Harbour", "Winter Lines", "Small Hours", "Kingfisher", "After the Rain", "North Road", "Static"];
+const seriesT = ["The Harbour", "Low Tide", "Brightwater", "The Agency", "Second Chances", "Hollow Hill", "Fieldwork", "The Crossing", "Marlow", "Parallel"];
+const chans = ["News 24", "World News", "Sport One", "Sport Two", "Arena", "Drama+", "Comedy Gold", "Movies 1", "Movies 2", "Docs", "Nature", "History", "Kids", "Toons", "Music Hits", "Weather", "Business", "Food", "Travel", "Retro"];
+const nowNext = n => [["The Six O'Clock News", "18:00–18:30"], ["Live: Evening Match", "19:45–22:00"], ["Coast to Coast", "20:00–21:00"]][hue(n) % 3];
+
+function card(cls, title, extra = "", go = "", ttl = true) {
+  return `<div class="card ${cls} focusable" tabindex="0" ${go ? `data-go="${go}"` : ""}>
+    <div class="art" style="background:${art(title, cls === 'poster' ? 160 : 135)}"></div>${ttl ? `<div class="ttl">${title}</div>` : ""}${extra}<div class="cap">${title}</div></div>`;
+}
+function row(label, cards) { return `<div class="row"><h3>${label}</h3><div class="track">${cards}</div></div>`; }
+const bar = p => `<div class="bar"><div class="progress"><i style="width:${p}%"></i></div></div>`;
+
+document.getElementById("homeRows").innerHTML =
+  row("Continue watching", [["The Harbour", 62, "S2:E5"], ["Night Train", 30, "Film"], ["Low Tide", 85, "S1:E3"], ["Brightwater", 12, "S3:E1"], ["Signal", 44, "Film"]]
+    .map(([t, p, b]) => card("landscape", t, `<div class="badge">${b}</div>${bar(p)}`, b === "Film" ? "player" : "detail")).join("")) +
+  row("My List", seriesT.slice(2, 9).map(t => card("poster", t, "", "detail")).join("")) +
+  row("Favourite channels", chans.slice(0, 8).map(c => `<div class="card chan focusable" tabindex="0" data-go="player">${c}<div class="cap">${c}</div></div>`).join("")) +
+  row("Recently added films", films.slice(0, 9).map(t => card("poster", t, "", "player")).join(""));
+
+const filmCats = ["Recommended", "New this month", "Action", "Comedy", "Documentaries"];
+document.getElementById("filmRows").innerHTML = filmCats.map((c, i) =>
+  row(c, films.slice(i % 4).concat(films.slice(0, i % 4)).slice(0, 9).map(t => card("poster", t, "", "player")).join("") +
+    `<div class="card poster seeall focusable" tabindex="0">See all ›</div>`)).join("");
+document.getElementById("seriesRows").innerHTML = ["Continue watching", "Recommended", "Drama", "Crime", "Comedy"].map((c, i) =>
+  row(c, seriesT.slice(i % 5).concat(seriesT.slice(0, i % 5)).slice(0, 9).map(t => card("poster", t, i === 0 ? bar(30 + i * 10) : "", "detail")).join("") +
+    `<div class="card poster seeall focusable" tabindex="0">See all ›</div>`)).join("");
+
+document.getElementById("episodes").innerHTML = ["Arrival", "The Letters", "Tidewater", "Fog", "Crossing", "The Lighthouse", "Undertow", "Home"].map((t, i) =>
+  `<div class="card landscape focusable" tabindex="0" data-go="player"><div class="art" style="background:${art(t)}"></div>
+   ${i < 4 ? `<div class="watched">✓</div>` : ""}${i === 4 ? bar(62) : ""}
+   <div class="ep-meta" style="opacity:1"><b>E${i + 1} · ${t}</b>${i === 4 ? "29 of 48 min" : "48 min"}</div></div>`).join("");
+
+// Live TV
+const liveCats = [["★ Favourites", 6], ["UK · Entertainment", 66], ["UK · News", 18], ["UK · Sport", 47], ["UK · Movies", 42], ["UK · Kids", 23], ["UK · Documentaries", 26], ["Ireland", 29], ["Music", 10]];
+document.getElementById("cats").innerHTML += liveCats.map(([c, n], i) => `<div class="cat focusable ${i === 1 ? "sel" : ""}" tabindex="0"><span>${c}</span><span>${n}</span></div>`).join("");
+document.getElementById("chlist").innerHTML = `<div class="search-mini focusable" tabindex="0" data-go="search">⌕&nbsp; Search channels</div>` +
+  chans.slice(0, 11).map((c, i) => `<div class="ch focusable" tabindex="0" data-go="player" data-ch="${c}" data-n="${101 + i}">
+    <span class="num">${101 + i}</span><span class="logo">${c.split(" ")[0].toUpperCase().slice(0, 6)}</span>
+    <span class="nm">${c}<small>Now: ${nowNext(c)[0]}</small></span>${i % 4 === 0 ? `<span class="fav">★</span>` : "<span></span>"}</div>`).join("");
+function preview(c, n) {
+  const [p, t] = nowNext(c);
+  document.getElementById("preview").innerHTML = `<div class="big">${c.toUpperCase()}</div><h4>${n} · ${c}</h4>
+    <div class="np"><b>Now</b> ${p} · ${t}</div><div class="progress"><i style="width:40%"></i></div>
+    <div class="np"><b>Next</b> Evening Edition · 18:30–19:00</div>
+    <div class="np" style="margin-top:auto">OK to watch · ☰ to add to favourites</div>
+    <div class="later">Now/next needs the programme guide (a later phase).</div>`;
+}
+preview(chans[0], 101);
+
+// Search
+document.getElementById("keys").innerHTML = "abcdefghijklmnopqrstuvwxyz1234567890".split("").map(k => `<div class="key focusable" tabindex="0">${k}</div>`).join("") +
+  `<div class="key wide focusable" tabindex="0">space</div><div class="key wide focusable" tabindex="0">⌫ delete</div>`;
+document.getElementById("results").innerHTML =
+  `<h3>Series</h3><div class="track">${["The Harbour", "Glass Harbour"].map(t => card("poster", t, "", "detail")).join("")}</div>` +
+  `<h3>Films</h3><div class="track">${["Glass Harbour", "Harbour Lights", "Harvest"].map(t => card("poster", t, "", "player")).join("")}</div>` +
+  `<h3>Channels</h3><div class="track">${["Harbour TV", "Harmony"].map(c => `<div class="card chan focusable" tabindex="0" data-go="player">${c}<div class="cap">${c}</div></div>`).join("")}</div>`;
+
+// Nav rail
+const icons = {
+  home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  live: '<path d="M3 7h18v12H3zM8 3l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2"/>',
+  films: '<path d="M4 4h16v16H4zM8 4v16M16 4v16M4 9h4M4 15h4M16 9h4M16 15h4" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  series: '<path d="M3 6h18v11H3zM8 21h8" fill="none" stroke="currentColor" stroke-width="2"/>',
+  search: '<circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 16l5 5" stroke="currentColor" stroke-width="2"/>',
+  mylist: '<path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="2.2"/>',
+  settings: '<circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2"/>',
+};
+const nav = [["home", "Home"], ["search", "Search"], ["live", "Live TV"], ["series", "Series"], ["films", "Films"], ["mylist", "My List"]];
+document.getElementById("rail").innerHTML += nav.map(([id, label]) =>
+  `<div class="item focusable" tabindex="0" data-go="${id === "mylist" ? "home" : id}" data-nav="${id}"><svg viewBox="0 0 24 24" fill="currentColor">${icons[id]}</svg><span>${label}</span></div>`).join("") +
+  `<div class="spacer"></div><div class="item focusable" tabindex="0" data-nav="settings"><svg viewBox="0 0 24 24">${icons.settings}</svg><span>Settings</span></div>`;
+
+// ---------- screen switching ----------
+const screens = ["home", "live", "films", "series", "detail", "search"];
+const chromeBtns = [["home", "Home"], ["live", "Live TV (dense list)"], ["series", "Series"], ["detail", "Series detail"], ["films", "Films"], ["search", "Search"], ["player", "Player"]];
+document.getElementById("chrome").innerHTML = chromeBtns.map(([id, l]) => `<button data-s="${id}">${l}</button>`).join("");
+let backStack = [], current = "home";
+
+function show(id, opts = {}) {
+  if (!opts.back && id !== current) backStack.push(current);
+  current = id;
+  const playing = id === "player";
+  document.getElementById("player").classList.toggle("on", playing);
+  document.getElementById("rail").style.display = playing ? "none" : "";
+  screens.forEach(s => document.getElementById(s).classList.toggle("on", s === id));
+  document.querySelectorAll(".side").forEach(s => s.classList.remove("on"));
+  if (playing && opts.side) document.getElementById("side-" + opts.side).classList.add("on");
+  document.querySelectorAll(".chrome button").forEach(b => b.classList.toggle("on", b.dataset.s === id));
+  const navId = { home: "home", live: "live", films: "films", series: "series", detail: "series", search: "search" }[id];
+  document.querySelectorAll(".rail .item").forEach(i => i.classList.toggle("current", i.dataset.nav === navId));
+  const first = playing ? (opts.side ? `#side-${opts.side} .opt` : ".ctrl") :
+    { home: "#home .btn.primary", live: "#chlist .ch", films: "#filmRows .card", series: "#seriesRows .card", detail: "#detail .btn.primary", search: "#keys .key" }[id];
+  setTimeout(() => document.querySelector(first)?.focus({ preventScroll: true }), 0);
+  document.querySelectorAll(".scroll").forEach(s => s.scrollTop = 0);
+}
+document.getElementById("chrome").addEventListener("click", e => e.target.dataset.s && show(e.target.dataset.s));
+
+function activate(el) {
+  if (el.dataset.side && el.closest(".player")) { document.querySelectorAll(".side").forEach(s => s.classList.toggle("on", s.id === "side-" + el.dataset.side)); document.querySelector(`#side-${el.dataset.side} .opt`).focus(); return; }
+  if (el.dataset.go) return show(el.dataset.go, { side: el.dataset.side });
+  if (el.classList.contains("opt")) { el.parentElement.querySelectorAll(".opt").forEach(o => { if (o.parentElement === el.parentElement) o.classList.remove("sel"); }); el.classList.add("sel"); }
+  if (el.classList.contains("chip")) { el.parentElement.querySelectorAll(".chip").forEach(c => c.classList.toggle("sel", c === el)); }
+  if (el.classList.contains("cat")) { el.parentElement.querySelectorAll(".cat").forEach(c => c.classList.toggle("sel", c === el)); }
+  if (el.dataset.toggle === "mylist") el.innerHTML = el.innerHTML.includes("＋") ? "✓&nbsp; In My List" : "＋&nbsp; My List";
+  if (el.classList.contains("key")) { const q = document.getElementById("q"); const k = el.textContent; q.textContent = k === "space" ? q.textContent + " " : k.startsWith("⌫") ? q.textContent.slice(0, -1) : q.textContent + k; }
+}
+document.addEventListener("click", e => { const f = e.target.closest(".focusable"); if (f) { f.focus(); activate(f); } });
+document.addEventListener("focusin", e => {
+  const el = e.target;
+  // Keep the focused card in view: horizontally inside its row, vertically inside the page.
+  const track = el.closest(".track"); if (track) { const l = el.offsetLeft - 48; if (l < track.scrollLeft || l + el.offsetWidth + 96 > track.scrollLeft + track.clientWidth) track.scrollLeft = Math.max(0, l - 40); }
+  const sc = el.closest(".scroll"); if (sc) { const r = el.closest(".row") || el.closest(".billboard"); if (r) sc.scrollTop = r.classList.contains("billboard") ? 0 : Math.max(0, r.offsetTop - 120); }
+  if (el.dataset.ch) preview(el.dataset.ch, el.dataset.n);
+  if (el.classList.contains("cat")) el.parentElement.querySelectorAll(".cat").forEach(c => c.classList.toggle("sel", c === el));
+});
+
+// ---------- D-pad style spatial navigation ----------
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" || e.key === "Backspace") {
+    const open = document.querySelector(".side.on"); if (open) { open.classList.remove("on"); document.querySelector(".ctrl:last-child").focus(); return; }
+    if (backStack.length) show(backStack.pop(), { back: true }); e.preventDefault(); return;
+  }
+  if (e.key === "Enter") { const f = document.activeElement; if (f?.classList.contains("focusable")) activate(f); return; }
+  const dir = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key]; if (!dir) return;
+  e.preventDefault();
+  const scope = current === "player" ? (document.querySelector(".side.on") || document.getElementById("player")) : document.getElementById("stage");
+  const items = [...scope.querySelectorAll(".focusable")].filter(el => el.offsetParent !== null && (current === "player" || el.closest(".rail") || el.closest(".screen.on")));
+  const cur = document.activeElement; if (!items.includes(cur)) return items[0]?.focus();
+  const r = cur.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  let best, score = Infinity;
+  for (const el of items) {
+    if (el === cur) continue;
+    const b = el.getBoundingClientRect(), dx = b.left + b.width / 2 - cx, dy = b.top + b.height / 2 - cy;
+    const along = dx * dir[0] + dy * dir[1]; if (along <= 4) continue;
+    const s = along + (Math.abs(dx * dir[1]) + Math.abs(dy * dir[0])) * 2.5; if (s < score) { score = s; best = el; }
+  }
+  best?.focus({ preventScroll: true });
+});
+
+// ---------- scale the 1280x720 stage to the frame ----------
+const fit = () => { const w = document.getElementById("frame").clientWidth; document.getElementById("stage").style.transform = `scale(${w / 1280})`; };
+addEventListener("resize", fit); fit();
+show("home");
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Provider hosts are only known at runtime, so the platform has to permit cleartext.
+    The app itself refuses plain HTTP unless the user turns it on for their provider:
+    see data/net/CleartextGuard.kt.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

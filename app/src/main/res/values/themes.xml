@@ -1,0 +1,17 @@
+<resources>
+    <style name="Theme.Telly" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:statusBarColor">@color/background</item>
+        <item name="android:navigationBarColor">@color/background</item>
+    </style>
+
+    <!-- Shown by the system while the app starts; MainActivity switches to the normal theme. -->
+    <style name="Theme.Telly.Launch">
+        <item name="android:windowBackground">@drawable/splash</item>
+    </style>
+
+    <style name="Theme.Telly.Player">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+</resources>
