@@ -84,7 +84,7 @@ fun MediaRow(title: String, content: LazyListScope.() -> Unit) {
     }
 }
 
-/** Click plays/opens; the remote's Menu button or a long press toggles My List. */
+/** Click plays/opens; the remote's Menu button or a long press runs [onFavourite] (usually: toggle My List). */
 @OptIn(ExperimentalFoundationApi::class)
 fun Modifier.mediaClick(onClick: () -> Unit, onFavourite: (() -> Unit)?): Modifier = this
     .onPreviewKeyEvent { event ->
@@ -144,6 +144,8 @@ fun LandscapeCard(
     onClick: () -> Unit,
     badge: String? = null,
     progress: Float? = null,
+    /** The remote's Menu button, or holding OK. */
+    onMenu: (() -> Unit)? = null,
 ) {
     Column(Modifier.width(208.dp)) {
         Box(
@@ -154,7 +156,7 @@ fun LandscapeCard(
                 .focusCard()
                 .clip(Telly.CardShape)
                 .background(Telly.SurfaceHigh)
-                .mediaClick(onClick, null),
+                .mediaClick(onClick, onMenu),
         ) {
             if (imageUrl != null) {
                 AsyncImage(model = imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())

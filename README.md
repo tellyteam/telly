@@ -7,6 +7,7 @@ an M3U playlist); telly gives you a clean, remote-friendly way to watch it.
 - **Live TV** as a quick channel list with a **programme guide** (now and next)
 - **Series and films** in rows, with detail pages, seasons and episodes
 - **Picks up where you left off**, including the next episode once the credits roll
+- **New episodes** of a series you've finished bring it back to Continue watching
 - **Search everything**, by typing or with the remote's voice button
 - **Favourites** (My List) with the remote's ☰ button
 - **Aspect ratio** per channel or title, including a custom fit

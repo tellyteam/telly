@@ -208,6 +208,8 @@ private fun Overlay(state: PlayerUiState, provider: Provider?, actions: PlayerAc
                             when (e.key) {
                                 Key.DirectionLeft -> { actions.seekBy(-step); true }
                                 Key.DirectionRight -> { actions.seekBy(step); true }
+                                // Always Play/Pause, rather than whichever button sits below the current position.
+                                Key.DirectionDown -> { runCatching { playFocus.requestFocus() }; true }
                                 else -> false
                             }
                         }

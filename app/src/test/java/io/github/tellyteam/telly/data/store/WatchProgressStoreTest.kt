@@ -23,7 +23,16 @@ class WatchProgressStoreTest {
 
     @Test
     fun `last minute counts as finished`() {
-        assertTrue(WatchProgressStore.Progress(2_345_000, 2_400_000).finished)
-        assertFalse(WatchProgressStore.Progress(2_330_000, 2_400_000).finished)
+        assertTrue(WatchProgressStore.Progress(1_160_000, 1_200_000).finished)
+        assertFalse(WatchProgressStore.Progress(1_130_000, 1_200_000).finished)
+    }
+
+    @Test
+    fun `long credits count as finished too`() {
+        // 45 minutes: the last 5% is 2 min 15 s, so stopping 2 minutes from the end is watched.
+        assertTrue(WatchProgressStore.Progress(2_580_000, 2_700_000).finished)
+        assertFalse(WatchProgressStore.Progress(2_560_000, 2_700_000).finished)
+        assertEquals(135_000L, WatchProgressStore.endMargin(2_700_000))
+        assertEquals(60_000L, WatchProgressStore.endMargin(600_000))
     }
 }

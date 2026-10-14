@@ -61,6 +61,7 @@ class PlayerActivity : ComponentActivity() {
     private lateinit var items: List<Channel>
     private var live = true
     private var heading = ""
+    private var seriesId: String? = null
     private var player: ExoPlayer? = null
     private var index = 0
     private val progress get() = container.watchProgress
@@ -93,6 +94,7 @@ class PlayerActivity : ComponentActivity() {
         }
         live = intent.getBooleanExtra(EXTRA_LIVE, true)
         heading = intent.getStringExtra(EXTRA_HEADING) ?: if (live) "Live TV" else LastWatchedStore.FILM
+        seriesId = intent.getStringExtra(EXTRA_SERIES_ID)
         index = (savedInstanceState?.getInt(EXTRA_INDEX) ?: intent.getIntExtra(EXTRA_INDEX, 0)).coerceIn(items.indices)
         provider = runCatching { container.providerStore.load() }.getOrNull()
         ui.live = live
@@ -326,7 +328,7 @@ class PlayerActivity : ComponentActivity() {
         }
         ui.nextTitle = if (!live) items.getOrNull(index + 1)?.name else null
         ui.nextPromptSecs = null
-        container.lastWatched.save(heading, live, items, index)
+        container.lastWatched.save(heading, live, items, index, seriesId)
         loadAspect()
     }
 
@@ -552,6 +554,7 @@ class PlayerActivity : ComponentActivity() {
         private const val EXTRA_INDEX = "index"
         private const val EXTRA_LIVE = "live"
         private const val EXTRA_HEADING = "heading"
+        private const val EXTRA_SERIES_ID = "seriesId"
         private const val ASPECT_STEP = 0.02f
         private const val ASPECT_MIN = 0.5f
         private const val ASPECT_MAX = 2f
@@ -561,11 +564,12 @@ class PlayerActivity : ComponentActivity() {
         private val OK_KEYS = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
 
         /** [heading] labels it under "pick up where you left off": "Live TV", "Film" or the series name. */
-        fun intent(context: Context, index: Int, live: Boolean, heading: String) =
+        fun intent(context: Context, index: Int, live: Boolean, heading: String, seriesId: String? = null) =
             Intent(context, PlayerActivity::class.java)
                 .putExtra(EXTRA_INDEX, index)
                 .putExtra(EXTRA_LIVE, live)
                 .putExtra(EXTRA_HEADING, heading)
+                .putExtra(EXTRA_SERIES_ID, seriesId)
 
         private fun mediaItem(channel: Channel): MediaItem = MediaItem.Builder()
             .setUri(channel.streamUrl)
