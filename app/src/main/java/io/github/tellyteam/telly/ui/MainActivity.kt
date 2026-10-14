@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.tellyteam.telly.R
 import io.github.tellyteam.telly.container
+import io.github.tellyteam.telly.data.nameInSentence
 import io.github.tellyteam.telly.data.Channel
 import io.github.tellyteam.telly.data.Provider
 import io.github.tellyteam.telly.ui.live.LiveScreen
@@ -82,7 +83,7 @@ class MainActivity : ComponentActivity() {
                         is UiState.Loading -> Centered {
                             TellyWordmark(fontSize = 64.sp)
                             CircularProgressIndicator()
-                            Text("Loading channels from ${s.provider.name}…")
+                            Text("Loading channels from ${s.provider.nameInSentence}…")
                         }
                         is UiState.Failed -> FailedScreen(
                             message = s.message,

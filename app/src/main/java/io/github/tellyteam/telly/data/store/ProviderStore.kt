@@ -9,6 +9,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import io.github.tellyteam.telly.data.DEFAULT_PLAYLIST_NAME
+import io.github.tellyteam.telly.data.DEFAULT_PROVIDER_NAME
 import io.github.tellyteam.telly.data.Provider
 
 /** Keeps the single configured provider, encrypted at rest. */
@@ -51,7 +53,12 @@ class ProviderStore(context: Context) {
 
         fun decode(text: String): Provider {
             val o = Json.parseToJsonElement(text).jsonObject
-            val name = o.str("name")
+            // Earlier versions' default names.
+            val name = when (val saved = o.str("name")) {
+                "My provider" -> DEFAULT_PROVIDER_NAME
+                "My playlist" -> DEFAULT_PLAYLIST_NAME
+                else -> saved
+            }
             val allowCleartext = (o["allowCleartext"] as? JsonPrimitive)?.booleanOrNull ?: false
             return when (o.str("type")) {
                 "xtream" -> Provider.Xtream(name, o.str("server"), o.str("username"), o.str("password"), allowCleartext)

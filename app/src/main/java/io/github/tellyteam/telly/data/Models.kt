@@ -69,6 +69,14 @@ data class SeriesData(val details: Details, val seasons: List<Season>)
 
 const val UNCATEGORISED = "Uncategorised"
 
+/** Names used when the user leaves the provider's name empty. */
+const val DEFAULT_PROVIDER_NAME = "Your provider"
+const val DEFAULT_PLAYLIST_NAME = "Your playlist"
+
+/** The provider's name for use mid-sentence: "Loading channels from your provider…". */
+val Provider.nameInSentence: String
+    get() = if (name == DEFAULT_PROVIDER_NAME || name == DEFAULT_PLAYLIST_NAME) name.lowercase() else name
+
 /**
  * Groups [items] in the provider's category order (which providers curate), then any
  * categories it didn't list, keeping each group's items in their original order.
