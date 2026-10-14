@@ -1,5 +1,7 @@
 package io.github.tellyteam.telly.ui.live
 
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -90,6 +92,9 @@ fun LiveScreen(
     }
     val channels = results ?: selected?.channels.orEmpty()
     var preview by remember { mutableStateOf<Channel?>(null) }
+    // The live picture only plays while a channel has focus, not while browsing categories.
+    var listFocused by remember { mutableStateOf(false) }
+    val previewPlayer = rememberPreviewPlayer()
 
     val shown = preview?.takeIf { it in channels } ?: channels.firstOrNull()
 
@@ -141,7 +146,7 @@ fun LiveScreen(
                 color = Telly.Muted,
                 modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
             )
-            LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+            LazyColumn(state = listState, modifier = Modifier.onFocusChanged { listFocused = it.hasFocus }, verticalArrangement = Arrangement.spacedBy(2.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
                 itemsIndexed(channels, key = { _, c -> c.id }) { index, channel ->
                     ChannelRow(
                         modifier = Modifier,
@@ -150,7 +155,11 @@ fun LiveScreen(
                         provider = provider,
                         favourite = FavouritesStore.live(channel) in favouriteSet,
                         onFocus = { preview = channel },
-                        onClick = { onPlay(channels, index) },
+                        onClick = {
+                            // Most providers allow one stream at a time: free the preview's first.
+                            previewPlayer.stop()
+                            onPlay(channels, index)
+                        },
                         onFavourite = { onToggleFavourite(FavouritesStore.live(channel)) },
                     )
                 }
@@ -158,7 +167,7 @@ fun LiveScreen(
         }
 
         // Preview of the focused channel
-        Preview(shown, provider, shown?.let { channels.indexOf(it) + 1 } ?: 0, Modifier.width(290.dp).fillMaxHeight().padding(top = 30.dp, end = 34.dp, bottom = 24.dp))
+        Preview(shown, listFocused, previewPlayer, provider, shown?.let { channels.indexOf(it) + 1 } ?: 0, Modifier.width(290.dp).fillMaxHeight().padding(top = 30.dp, end = 34.dp, bottom = 24.dp))
     }
     LaunchedEffect(Unit) { runCatching { searchFocus.requestFocus() } }
 }
@@ -251,7 +260,7 @@ private fun ChannelRow(
 }
 
 @Composable
-private fun Preview(channel: Channel?, provider: Provider, number: Int, modifier: Modifier) {
+private fun Preview(channel: Channel?, live: Boolean, player: ExoPlayer, provider: Provider, number: Int, modifier: Modifier) {
     Column(
         modifier
             .clip(Telly.ControlShape)
@@ -260,11 +269,18 @@ private fun Preview(channel: Channel?, provider: Provider, number: Int, modifier
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (channel == null) return@Column
-        Box(Modifier.fillMaxWidth().height(140.dp).clip(Telly.CardShape).background(Telly.LogoTile), contentAlignment = Alignment.Center) {
-            if (channel.logoUrl != null) {
-                AsyncImage(model = channel.logoUrl, contentDescription = null, modifier = Modifier.fillMaxSize().padding(22.dp))
-            } else {
-                Text(ChannelNames.channel(channel.name), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1B2433))
+        // 16:9, so the live picture fills it; the logo shows until the picture arrives.
+        LivePicture(
+            channel = if (live) channel else null,
+            player = player,
+            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(Telly.CardShape).background(Color.Black),
+        ) {
+            Box(Modifier.fillMaxSize().background(Telly.LogoTile), contentAlignment = Alignment.Center) {
+                if (channel.logoUrl != null) {
+                    AsyncImage(model = channel.logoUrl, contentDescription = null, modifier = Modifier.fillMaxSize().padding(22.dp))
+                } else {
+                    Text(ChannelNames.channel(channel.name), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1B2433))
+                }
             }
         }
         Text("$number · ${ChannelNames.channel(channel.name)}", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
