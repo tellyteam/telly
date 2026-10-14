@@ -15,7 +15,7 @@ class WatchProgressStore(context: Context) {
 
     data class Progress(val positionMs: Long, val durationMs: Long) {
         val fraction: Float get() = (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
-        val finished: Boolean get() = durationMs - positionMs < END_MARGIN_MS
+        val finished: Boolean get() = durationMs - positionMs < endMargin(durationMs)
     }
 
     fun get(streamUrl: String): Progress? = prefs.getString(key(streamUrl), null)?.let(::decode)
@@ -36,10 +36,17 @@ class WatchProgressStore(context: Context) {
 
     companion object {
         /**
-         * The last minute counts as the credits: the episode is treated as watched, and the
-         * "next episode" prompt shows. Streaming credits typically run 60–90 s, broadcast 20–40 s.
+         * The "next episode" prompt shows in the last minute. Streaming credits typically run
+         * 60–90 s, broadcast 20–40 s.
          */
         const val END_MARGIN_MS = 60_000L
+
+        /**
+         * How close to the end counts as watched: the last minute, or the last 5% when that's longer.
+         * Long episodes often run two or three minutes of credits (a 45-minute episode: 2¼ minutes).
+         */
+        fun endMargin(durationMs: Long): Long = maxOf(END_MARGIN_MS, durationMs / 20)
+
         private const val MIN_RESUME_MS = 15_000L
 
         /**

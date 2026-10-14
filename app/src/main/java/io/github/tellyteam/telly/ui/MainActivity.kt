@@ -1,6 +1,7 @@
 package io.github.tellyteam.telly.ui
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +29,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.tellyteam.telly.R
 import io.github.tellyteam.telly.container
@@ -66,6 +68,11 @@ class MainActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val vm: MainViewModel = viewModel()
                     val state by vm.state.collectAsStateWithLifecycle()
+                    // Back from the player (or the TV waking up): a finished series may have new episodes.
+                    LifecycleResumeEffect(vm) {
+                        vm.checkForNewEpisodes()
+                        onPauseOrDispose {}
+                    }
                     when (val s = state) {
                         is UiState.Setup -> SetupScreen(
                             existing = s.existing,
@@ -131,12 +138,16 @@ class MainActivity : ComponentActivity() {
         val shelves = rememberShelves(s.live, films, series)
         val actions = remember {
             HomeActions(
-                resume = { entry, index -> play(entry.channels(), index, entry.live, entry.heading) },
+                resume = { entry, index -> play(entry.channels(), index, entry.live, entry.heading, entry.seriesId) },
                 openSeries = vm::openSeries,
                 openFilm = vm::openFilm,
                 playFilm = { film -> play(listOf(film), 0, live = false, heading = LastWatchedStore.FILM) },
                 playChannel = { channels, index -> play(channels, index, live = true, heading = "Live TV") },
                 toggleFavourite = container.favourites::toggle,
+                removeFromContinue = { entry ->
+                    container.lastWatched.remove(entry.slot)
+                    Toast.makeText(this@MainActivity, "Removed from Continue watching", Toast.LENGTH_SHORT).show()
+                },
             )
         }
         val favouriteSet = remember(favourites) { favourites.toSet() }
@@ -167,7 +178,7 @@ class MainActivity : ComponentActivity() {
                         inMyList = FavouritesStore.series(d.series) in favouriteSet,
                         onToggleMyList = { container.favourites.toggle(FavouritesStore.series(d.series)) },
                         onResume = actions.resume,
-                        onPlayEpisode = { show, season, index -> play(season.episodes, index, live = false, heading = show.name) },
+                        onPlayEpisode = { show, season, index -> play(season.episodes, index, live = false, heading = show.name, seriesId = show.id) },
                         onBack = vm::closeSeries,
                     )
                 }
@@ -238,9 +249,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun play(playlist: List<Channel>, index: Int, live: Boolean, heading: String) {
+    private fun play(playlist: List<Channel>, index: Int, live: Boolean, heading: String, seriesId: String? = null) {
         container.playlist = playlist
-        startActivity(PlayerActivity.intent(this, index, live, heading))
+        startActivity(PlayerActivity.intent(this, index, live, heading, seriesId))
     }
 }
 

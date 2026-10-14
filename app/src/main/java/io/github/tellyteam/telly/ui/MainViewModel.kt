@@ -25,6 +25,7 @@ import io.github.tellyteam.telly.container
 import io.github.tellyteam.telly.data.Channel
 import io.github.tellyteam.telly.data.ChannelGroup
 import io.github.tellyteam.telly.data.Details
+import io.github.tellyteam.telly.data.NewEpisodes
 import io.github.tellyteam.telly.data.SeriesData
 import io.github.tellyteam.telly.data.Provider
 import io.github.tellyteam.telly.data.Season
@@ -117,9 +118,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Bumped whenever the provider changes, so late results from the old one are dropped. */
     private var generation = 0
 
+    /** One new-episode check at a time. */
+    private val episodeCheck = Mutex()
+
     init {
         // Weekly, quietly: only says anything if there is a newer version.
         if (container.updates.dueForCheck()) checkForUpdates(manual = false)
+        viewModelScope.launch { _series.collect { if (it is Load.Done) checkForNewEpisodes() } }
         val saved = container.providerStore.load()
         if (saved != null) connect(saved, save = false) else devProvider()?.let { _state.value = UiState.Setup(it) }
     }
@@ -310,6 +315,51 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (e: Exception) {
                     if (cached == null && gen == generation) publish(Load.Failed(e.message ?: e.javaClass.simpleName))
                 }
+            }
+        }
+    }
+
+    /**
+     * Brings back series that were watched to the end of what they had, once the provider adds more:
+     * the series returns to Continue watching at the next episode ("New episodes" when they arrived
+     * after the user watched). Runs as the series list loads and when the player closes; each series
+     * is only fetched again after the provider has changed it.
+     */
+    fun checkForNewEpisodes() {
+        val provider = xtream() ?: return
+        val groups = (_series.value as? Load.Done)?.value ?: return
+        viewModelScope.launch {
+            if (!episodeCheck.tryLock()) return@launch
+            try {
+                val history = container.lastWatched.history.value
+                val progress = container.watchProgress
+                val candidates = history.filter { it.caughtUp(progress) }
+                if (candidates.isEmpty()) return@launch
+                val all = withContext(Dispatchers.Default) { groups.flatMap { it.series } }
+                val byId = all.associateBy { it.id }
+                val byName = all.associateBy { it.name }
+                val checks = container.newEpisodeChecks
+                for (entry in candidates) {
+                    val show = entry.seriesId?.let(byId::get) ?: byName[entry.heading] ?: continue
+                    if (!NewEpisodes.due(show, checks.get(show.id), System.currentTimeMillis())) continue
+                    val data = try {
+                        repo.seriesData(provider, show, Source.NETWORK)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    } ?: continue
+                    checks.mark(show.id, show.added)
+                    val (season, index) = NewEpisodes.after(data.seasons, entry.current.id) ?: continue
+                    val fresh = NewEpisodes.isNew(show, entry.savedAt)
+                    container.lastWatched.save(
+                        entry.heading, live = false, season.episodes, index,
+                        seriesId = show.id, newEpisodes = fresh, toFront = fresh,
+                    )
+                    if (fresh) Toast.makeText(getApplication(), "New episodes of ${entry.heading}", Toast.LENGTH_LONG).show()
+                }
+            } finally {
+                episodeCheck.unlock()
             }
         }
     }

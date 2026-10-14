@@ -71,6 +71,8 @@ class HomeActions(
     val playFilm: (Channel) -> Unit,
     val playChannel: (List<Channel>, Int) -> Unit,
     val toggleFavourite: (String) -> Unit,
+    /** The remote's Menu button (or holding OK) on a Continue watching card. */
+    val removeFromContinue: (LastWatched) -> Unit,
 )
 
 /**
@@ -139,7 +141,8 @@ fun HomeScreen(
             if (saved?.finished == true && target == entry.index) null else entry to target
         }
     }
-    val hero = history.firstOrNull { !it.live } ?: history.firstOrNull()
+    // Something still to watch, else the last channel: a finished film or series never leads Home.
+    val hero = continueItems.firstOrNull()?.first ?: history.firstOrNull { it.live }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item(key = "billboard") {
@@ -150,6 +153,7 @@ fun HomeScreen(
                 Billboard(
                     eyebrow = when {
                         hero.live -> "Last watched"
+                        hero.newEpisodes -> "New episodes"
                         target != hero.index -> "Up next"
                         else -> "Continue watching"
                     },
@@ -191,9 +195,15 @@ fun HomeScreen(
                             title = if (entry.isFilm) item.name else entry.heading,
                             subtitle = if (entry.isFilm) "Film" else item.name,
                             imageUrl = item.logoUrl,
-                            badge = if (entry.isFilm) "Film" else if (target != entry.index) "Up next" else item.group,
+                            badge = when {
+                                entry.isFilm -> "Film"
+                                entry.newEpisodes -> "New episodes"
+                                target != entry.index -> "Up next"
+                                else -> item.group
+                            },
                             progress = progressVersion.let { progress.get(item.streamUrl)?.takeIf { !it.finished }?.fraction },
                             onClick = { actions.resume(entry, target) },
+                            onMenu = { actions.removeFromContinue(entry) },
                         )
                     }
                 }
