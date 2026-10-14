@@ -6,6 +6,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import io.github.tellyteam.telly.data.Channel
 import io.github.tellyteam.telly.data.ChannelRepository
+import io.github.tellyteam.telly.data.NewEpisodeChecks
 import io.github.tellyteam.telly.data.guide.GuideRepository
 import io.github.tellyteam.telly.data.net.Http
 import io.github.tellyteam.telly.data.update.UpdateRepository
@@ -46,6 +47,7 @@ class AppContainer(context: Context) {
     val aspects = AspectStore(context)
     val guide = GuideRepository(http)
     val updates = UpdateRepository(context, http)
+    val newEpisodeChecks = NewEpisodeChecks(context)
 
     /** What the player plays: a live group (for zapping), one film, or a season's episodes (in order). */
     @Volatile

@@ -31,6 +31,12 @@ class LastWatchedStore(context: Context) {
         val live: Boolean,
         val index: Int,
         val items: List<Item>,
+        /** Series only; older history has none and is matched by [heading]. */
+        val seriesId: String? = null,
+        /** When this entry was saved (epoch ms; 0 in older history). */
+        val savedAt: Long = 0,
+        /** The provider added episodes after the last one watched; cleared once something is played. */
+        val newEpisodes: Boolean = false,
     ) {
         val current: Item get() = items[index.coerceIn(items.indices)]
         val isFilm: Boolean get() = !live && heading == FILM
@@ -53,12 +59,43 @@ class LastWatchedStore(context: Context) {
         }
 
         fun channels(): List<Channel> = items.map { Channel(it.id, it.name, it.group, it.logoUrl, it.streamUrl) }
+
+        /** A series watched to the end of everything it had: its last known episode is finished. */
+        fun caughtUp(progress: WatchProgressStore): Boolean =
+            !live && !isFilm && index >= items.lastIndex && progress.get(current.streamUrl)?.finished == true
     }
 
-    fun save(heading: String, live: Boolean, playlist: List<Channel>, index: Int) {
+    fun save(
+        heading: String,
+        live: Boolean,
+        playlist: List<Channel>,
+        index: Int,
+        seriesId: String? = null,
+        newEpisodes: Boolean = false,
+        toFront: Boolean = true,
+        now: Long = System.currentTimeMillis(),
+    ) {
         if (playlist.isEmpty()) return
-        val entry = LastWatched(heading, live, index, playlist.map { Item(it.id, it.name, it.group, it.logoUrl, it.streamUrl) })
-        val updated = (listOf(entry) + _history.value.filter { it.slot != entry.slot }).take(MAX_ENTRIES)
+        val items = playlist.map { Item(it.id, it.name, it.group, it.logoUrl, it.streamUrl) }
+        // Keep the series id when an older entry (or a caller that doesn't know it) saves again.
+        val id = seriesId ?: _history.value.firstOrNull { !live && it.heading == heading && !it.isFilm }?.seriesId
+        store(LastWatched(heading, live, index, items, id, now, newEpisodes), toFront)
+    }
+
+    /** Takes an entry out of Continue watching. */
+    fun remove(slot: String) {
+        persist(_history.value.filter { it.slot != slot })
+    }
+
+    /** Newest first; with [toFront] false an existing entry is updated where it is. */
+    private fun store(entry: LastWatched, toFront: Boolean = true) {
+        val current = _history.value
+        val at = current.indexOfFirst { it.slot == entry.slot }
+        val updated = if (toFront || at < 0) listOf(entry) + current.filter { it.slot != entry.slot } else current.toMutableList().apply { set(at, entry) }
+        persist(updated.take(MAX_ENTRIES))
+    }
+
+    private fun persist(updated: List<LastWatched>) {
         _history.value = updated
         prefs.edit().putString(KEY, cipher.encrypt(json.encodeToString(listSerializer, updated))).apply()
     }
