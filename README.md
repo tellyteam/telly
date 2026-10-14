@@ -65,8 +65,10 @@ the setup screen in **debug** builds. Release builds never include it.
 Push a version tag; GitHub Actions tests, builds, signs and publishes `telly.apk`:
 
 ```bash
-git tag v1.0.1 && git push origin v1.0.1
+git tag -a v1.0.1 -m "- What changed, in a line or two" && git push origin v1.0.1
 ```
+
+The tag's message becomes the release notes, which telly shows in Settings → Updates.
 
 The release workflow needs two repository secrets: `TELLY_KEYSTORE_BASE64` (the release keystore,
 base64-encoded) and `TELLY_KEYSTORE_PASSWORD`. Every release must be signed with the same key, or

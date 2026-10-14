@@ -48,10 +48,20 @@ jobs:
           "$APKSIGNER" verify --print-certs "$APK" | head -3
           cp "$APK" telly.apk
 
+      # Release notes come from the tag's own message (git tag -a v1.2.3 -m "…"), never GitHub's
+      # generated notes: those credit people by account name, and telly shows the notes in the app.
+      - name: Release notes from the tag
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git for-each-ref "refs/tags/$GITHUB_REF_NAME" --format='%(contents)' > "$RUNNER_TEMP/notes.md"
+          # A lightweight tag has no message; its "contents" is the commit's, which isn't release notes.
+          [ "$(git cat-file -t "$GITHUB_REF_NAME")" = tag ] || : > "$RUNNER_TEMP/notes.md"
+
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: telly.apk
-          generate_release_notes: true
+          body_path: ${{ runner.temp }}/notes.md
+          generate_release_notes: false
 
       - name: Remove the signing key
         if: always()

@@ -29,7 +29,31 @@ object ReleaseParser {
         val apk = (o["assets"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
             .firstOrNull { (it["name"] as? JsonPrimitive)?.contentOrNull == APK_NAME }
             ?.let { (it["browser_download_url"] as? JsonPrimitive)?.contentOrNull } ?: return null
-        return Release(version, apk, (o["body"] as? JsonPrimitive)?.contentOrNull?.trim()?.ifBlank { null })
+        return Release(version, apk, (o["body"] as? JsonPrimitive)?.contentOrNull?.let(::cleanNotes))
+    }
+
+    /**
+     * Release notes as shown in the app: never anyone's account name. Drops GitHub's generated
+     * credits ("by @someone in …", "New Contributors", "Full Changelog") and any other @mention.
+     */
+    fun cleanNotes(body: String): String? {
+        var skipping = false
+        val lines = body.lines().mapNotNull { raw ->
+            val line = raw.trim()
+            when {
+                line.startsWith("## New Contributors", ignoreCase = true) -> { skipping = true; null }
+                line.startsWith("#") -> { skipping = false; null }
+                skipping -> null
+                line.startsWith("**Full Changelog**") -> null
+                line.contains("made their first contribution") -> null
+                else -> line
+                    .replace(Regex("""\s+by @[\w-]+(\s+in\s+\S+)?"""), "")
+                    .replace(Regex("""@[\w-]+"""), "")
+                    .replace(Regex(""" {2,}"""), " ")
+                    .trimEnd()
+            }
+        }
+        return lines.joinToString("\n").trim().replace(Regex("""\n{3,}"""), "\n\n").ifBlank { null }
     }
 
     /** True when [candidate] (e.g. "1.2.0") is a higher version than [current] ("1.1.9"). */
