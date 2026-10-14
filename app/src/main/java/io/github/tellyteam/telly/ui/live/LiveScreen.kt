@@ -61,7 +61,10 @@ private const val FAVOURITES = "★ Favourites"
 @Composable
 fun LiveScreen(
     provider: Provider,
+    /** Categories as the user arranged them (pinned first, hidden left out). */
     live: List<ChannelGroup>,
+    /** Every channel, so favourites from hidden categories still show. */
+    allLive: List<ChannelGroup>,
     favourites: List<String>,
     updating: Boolean,
     onPlay: (List<Channel>, Int) -> Unit,
@@ -73,8 +76,8 @@ fun LiveScreen(
     val searchFocus = remember { FocusRequester() }
 
     // Favourites first, in the order they were added; rebuilt only when either changes.
-    val groups = remember(live, favourites) {
-        val byKey = live.asSequence().flatMap { it.channels }.associateBy(FavouritesStore::live)
+    val groups = remember(live, allLive, favourites) {
+        val byKey = allLive.asSequence().flatMap { it.channels }.associateBy(FavouritesStore::live)
         val favs = favourites.mapNotNull { byKey[it] }
         if (favs.isEmpty()) live else listOf(ChannelGroup(FAVOURITES, favs)) + live
     }

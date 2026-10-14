@@ -79,6 +79,12 @@ class ChannelRepository(private val http: OkHttpClient, private val cache: Catal
         x.list("get_vod_info", mapOf("vod_id" to film.id), cacheName = "vod_info_${film.id}") { XtreamParser.details(parseJson(it)) }
     }
 
+    /** The subscription's details (end date, connections), straight from the provider. */
+    suspend fun account(provider: Provider.Xtream): XtreamParser.Account = withContext(Dispatchers.IO) {
+        val url = XtreamParser.apiUrl(XtreamParser.serverUrl(provider.server), provider.username, provider.password)
+        http.fetch(url).use { r -> XtreamParser.account(parseJson(r.body!!.byteStream())) }
+    }
+
     /** Forgets every saved catalogue; the next load downloads afresh. */
     suspend fun clearSavedCatalogues() = withContext(Dispatchers.IO) { cache.clearAll() }
 

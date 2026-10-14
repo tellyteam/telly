@@ -51,6 +51,8 @@ import io.github.tellyteam.telly.data.ChannelGroup
 import io.github.tellyteam.telly.data.Series
 import io.github.tellyteam.telly.data.SeriesGroup
 import io.github.tellyteam.telly.data.store.FavouritesStore
+import io.github.tellyteam.telly.data.store.CategoryKind
+import io.github.tellyteam.telly.data.store.CategoryPrefs
 import io.github.tellyteam.telly.data.store.LastWatchedStore.LastWatched
 import io.github.tellyteam.telly.data.store.WatchProgressStore
 import io.github.tellyteam.telly.ui.Load
@@ -95,25 +97,39 @@ class Shelves(
 )
 
 @Composable
-fun rememberShelves(live: List<ChannelGroup>, films: Load<List<ChannelGroup>>, series: Load<List<SeriesGroup>>): Shelves {
+fun rememberShelves(
+    live: List<ChannelGroup>,
+    films: Load<List<ChannelGroup>>,
+    series: Load<List<SeriesGroup>>,
+    arrangement: Map<CategoryKind, CategoryPrefs>,
+): Shelves {
     val filmGroups = (films as? Load.Done)?.value.orEmpty()
     val seriesGroups = (series as? Load.Done)?.value.orEmpty()
-    val shelves by produceState(Shelves(), live, filmGroups, seriesGroups) {
+    val shelves by produceState(Shelves(), live, filmGroups, seriesGroups, arrangement) {
         value = withContext(Dispatchers.Default) {
+            fun prefs(kind: CategoryKind) = arrangement[kind] ?: CategoryPrefs()
+            // Hidden categories stay out of rows, "Recently added" and Search…
+            val shownFilmGroups = prefs(CategoryKind.FILMS).arrange(filmGroups) { it.name }
+            val shownSeriesGroups = prefs(CategoryKind.SERIES).arrange(seriesGroups) { it.name }
+            val shownLive = prefs(CategoryKind.LIVE).arrange(live) { it.name }
+            val films = shownFilmGroups.asSequence().flatMap { it.channels }.distinctBy { it.id }.toList()
+            val shows = shownSeriesGroups.asSequence().flatMap { it.series }.distinctBy { it.id }.toList()
+            val channels = shownLive.asSequence().flatMap { it.channels }.distinctBy { it.id }.toList()
+            // …but My List and history still find everything.
             val allFilms = filmGroups.asSequence().flatMap { it.channels }.distinctBy { it.id }.toList()
             val allSeries = seriesGroups.asSequence().flatMap { it.series }.distinctBy { it.id }.toList()
             val allChannels = live.asSequence().flatMap { it.channels }.distinctBy { it.id }.toList()
             Shelves(
-                films = allFilms,
-                series = allSeries,
-                channels = allChannels,
+                films = films,
+                series = shows,
+                channels = channels,
                 seriesByKey = allSeries.associateBy(FavouritesStore::series),
                 filmsByKey = allFilms.associateBy(FavouritesStore::film),
                 channelsByKey = allChannels.associateBy(FavouritesStore::live),
-                recentFilms = allFilms.filter { it.added > 0 }.sortedByDescending { it.added }.take(ROW_LIMIT),
-                recentSeries = allSeries.filter { it.added > 0 }.sortedByDescending { it.added }.take(ROW_LIMIT),
-                filmRows = filmGroups.take(3).map { ChannelGroup(it.name, it.channels.take(ROW_LIMIT)) },
-                seriesRows = seriesGroups.take(3).map { SeriesGroup(it.name, it.series.take(ROW_LIMIT)) },
+                recentFilms = films.filter { it.added > 0 }.sortedByDescending { it.added }.take(ROW_LIMIT),
+                recentSeries = shows.filter { it.added > 0 }.sortedByDescending { it.added }.take(ROW_LIMIT),
+                filmRows = shownFilmGroups.take(3).map { ChannelGroup(it.name, it.channels.take(ROW_LIMIT)) },
+                seriesRows = shownSeriesGroups.take(3).map { SeriesGroup(it.name, it.series.take(ROW_LIMIT)) },
                 seriesByName = allSeries.associateBy { it.name },
             )
         }

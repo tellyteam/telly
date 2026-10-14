@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,7 +26,12 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import io.github.tellyteam.telly.BuildConfig
 import io.github.tellyteam.telly.ui.UpdateState
+import io.github.tellyteam.telly.data.AccountText
 import io.github.tellyteam.telly.data.Provider
+import io.github.tellyteam.telly.data.store.CategoryKind
+import io.github.tellyteam.telly.data.store.CategoryPrefs
+import io.github.tellyteam.telly.data.xtream.XtreamParser
+import io.github.tellyteam.telly.ui.Load
 import io.github.tellyteam.telly.ui.components.PageInset
 import io.github.tellyteam.telly.ui.home.PillButton
 import io.github.tellyteam.telly.ui.theme.Telly
@@ -43,8 +49,30 @@ fun SettingsScreen(
     update: UpdateState,
     onCheckForUpdates: () -> Unit,
     onInstallUpdate: () -> Unit,
+    account: Load<XtreamParser.Account>,
+    onLoadAccount: () -> Unit,
+    /** Each list's categories (name and item count), in the provider's order. */
+    categories: Map<CategoryKind, List<Pair<String, Int>>>,
+    categoryPrefs: Map<CategoryKind, CategoryPrefs>,
+    onTogglePinned: (CategoryKind, String) -> Unit,
+    onToggleHidden: (CategoryKind, String) -> Unit,
+    onResetCategories: (CategoryKind) -> Unit,
 ) {
+    var managing by rememberSaveable { mutableStateOf<CategoryKind?>(null) }
+    managing?.let { kind ->
+        CategoryManager(
+            kind = kind,
+            categories = categories[kind].orEmpty(),
+            prefs = categoryPrefs[kind] ?: CategoryPrefs(),
+            onTogglePinned = { onTogglePinned(kind, it) },
+            onToggleHidden = { onToggleHidden(kind, it) },
+            onReset = { onResetCategories(kind) },
+            onDone = { managing = null },
+        )
+        return
+    }
     val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(provider) { if (provider is Provider.Xtream) onLoadAccount() }
     var confirmClear by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf(false) }
     // A second press within a few seconds confirms; otherwise the button resets.
@@ -67,6 +95,16 @@ fun SettingsScreen(
                 fontSize = 13.sp,
                 color = Telly.Muted,
             )
+            if (provider is Provider.Xtream) {
+                when (account) {
+                    is Load.Done -> {
+                        Text("Subscription: ${AccountText.summary(account.value, System.currentTimeMillis())}", fontSize = 13.sp, color = Telly.Text, modifier = Modifier.padding(top = 6.dp))
+                        AccountText.connections(account.value)?.let { Text(it, fontSize = 13.sp, color = Telly.Muted) }
+                    }
+                    is Load.Failed -> Text(account.message, fontSize = 13.sp, color = Telly.Faint, modifier = Modifier.padding(top = 6.dp))
+                    else -> Text("Checking your subscription…", fontSize = 13.sp, color = Telly.Faint, modifier = Modifier.padding(top = 6.dp))
+                }
+            }
             Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 PillButton("Edit provider", primary = false, onClick = onEditProvider, modifier = Modifier.focusRequester(firstFocus))
                 PillButton(
@@ -74,6 +112,25 @@ fun SettingsScreen(
                     primary = false,
                     onClick = { if (confirmRemove) onRemoveProvider() else confirmRemove = true },
                 )
+            }
+        }
+
+        Section("Categories") {
+            Text(
+                "Pin the categories you use most to the top, and hide the ones you never watch. Hidden categories also stay out of Home and Search.",
+                fontSize = 13.sp,
+                color = Telly.Muted,
+                modifier = Modifier.width(560.dp),
+            )
+            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                CategoryKind.entries.filter { categories[it].orEmpty().isNotEmpty() }.forEach { kind ->
+                    val p = categoryPrefs[kind] ?: CategoryPrefs()
+                    val extra = listOfNotNull(
+                        p.pinned.size.takeIf { it > 0 }?.let { "$it pinned" },
+                        p.hidden.size.takeIf { it > 0 }?.let { "$it hidden" },
+                    ).joinToString(", ")
+                    PillButton(if (extra.isEmpty()) kind.label else "${kind.label} · $extra", primary = false, onClick = { managing = kind })
+                }
             }
         }
 

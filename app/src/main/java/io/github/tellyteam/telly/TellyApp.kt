@@ -13,6 +13,7 @@ import io.github.tellyteam.telly.data.update.UpdateRepository
 import io.github.tellyteam.telly.data.net.NetworkPolicy
 import io.github.tellyteam.telly.data.store.AspectStore
 import io.github.tellyteam.telly.data.store.CatalogCache
+import io.github.tellyteam.telly.data.store.CategoryStore
 import io.github.tellyteam.telly.data.store.FavouritesStore
 import io.github.tellyteam.telly.data.store.LastWatchedStore
 import io.github.tellyteam.telly.data.store.ProviderStore
@@ -48,6 +49,7 @@ class AppContainer(context: Context) {
     val guide = GuideRepository(http)
     val updates = UpdateRepository(context, http)
     val newEpisodeChecks = NewEpisodeChecks(context)
+    val categories = CategoryStore(context)
 
     /** What the player plays: a live group (for zapping), one film, or a season's episodes (in order). */
     @Volatile

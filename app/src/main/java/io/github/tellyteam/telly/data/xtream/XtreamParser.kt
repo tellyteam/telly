@@ -124,17 +124,32 @@ object XtreamParser {
 
     // ---- Account ----
 
-    data class Account(val authenticated: Boolean, val status: String?, val outputFormats: List<String>)
+    data class Account(
+        val authenticated: Boolean,
+        val status: String?,
+        val outputFormats: List<String>,
+        /** When the subscription ends (epoch ms); null when the provider gives no end date. */
+        val expiresAtMs: Long? = null,
+        val maxConnections: Int? = null,
+        val activeConnections: Int? = null,
+        val trial: Boolean = false,
+    )
 
     fun account(root: JsonElement): Account {
         val userInfo = (root as? JsonObject)?.get("user_info") as? JsonObject
             ?: return Account(authenticated = false, status = null, outputFormats = emptyList())
+        fun number(key: String) = userInfo.string(key)?.trim()?.toLongOrNull()
         return Account(
             authenticated = userInfo.string("auth") == "1",
             status = userInfo.string("status"),
             outputFormats = (userInfo["allowed_output_formats"] as? JsonArray)
                 ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
                 .orEmpty(),
+            // Seconds since 1970; panels send null, "null" or 0 for "never expires".
+            expiresAtMs = number("exp_date")?.takeIf { it > 0 }?.let { it * 1000 },
+            maxConnections = number("max_connections")?.toInt()?.takeIf { it > 0 },
+            activeConnections = number("active_cons")?.toInt()?.takeIf { it >= 0 },
+            trial = userInfo.string("is_trial") == "1",
         )
     }
 

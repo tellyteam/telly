@@ -1,6 +1,7 @@
 package io.github.tellyteam.telly.ui
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -24,6 +25,7 @@ import io.github.tellyteam.telly.data.update.ReleaseParser
 import io.github.tellyteam.telly.container
 import io.github.tellyteam.telly.data.Channel
 import io.github.tellyteam.telly.data.ChannelGroup
+import io.github.tellyteam.telly.data.AccountText
 import io.github.tellyteam.telly.data.Details
 import io.github.tellyteam.telly.data.NewEpisodes
 import io.github.tellyteam.telly.data.SeriesData
@@ -32,6 +34,7 @@ import io.github.tellyteam.telly.data.Season
 import io.github.tellyteam.telly.data.Series
 import io.github.tellyteam.telly.data.SeriesGroup
 import io.github.tellyteam.telly.data.Source
+import io.github.tellyteam.telly.data.xtream.XtreamParser
 import kotlin.coroutines.cancellation.CancellationException
 
 sealed interface UiState {
@@ -108,6 +111,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val update: StateFlow<UpdateState> = _update
 
+    /** The subscription's end date and connections, shown in Settings (Xtream providers only). */
+    private val _account = MutableStateFlow<Load<XtreamParser.Account>>(Load.Idle)
+    val account: StateFlow<Load<XtreamParser.Account>> = _account
+
     /** Number of background refreshes running, for the "Updating…" hint. */
     private val _updating = MutableStateFlow(0)
     val updating: StateFlow<Int> = _updating
@@ -163,6 +170,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (_state.value is UiState.Ready) {
                 loadFilms()
                 loadSeries()
+                remindIfExpiring()
             }
         }
     }
@@ -364,6 +372,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Fetches the subscription's details afresh (Settings shows them; cheap: one small request). */
+    fun loadAccount() {
+        val provider = xtream() ?: return
+        if (_account.value !is Load.Done) _account.value = Load.Loading
+        viewModelScope.launch {
+            _account.value = try {
+                Load.Done(repo.account(provider))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                (_account.value as? Load.Done) ?: Load.Failed("Couldn't reach your provider just now.")
+            }
+        }
+    }
+
+    /** Once a day, in the last week of a subscription: "Your subscription ends in 3 days". */
+    private fun remindIfExpiring() {
+        val provider = xtream() ?: return
+        val prefs = getApplication<Application>().getSharedPreferences("account", Context.MODE_PRIVATE)
+        val today = System.currentTimeMillis() / DAY_MS
+        if (prefs.getLong("remindedDay", -1) == today) return
+        viewModelScope.launch {
+            val account = runCatching { repo.account(provider) }.getOrNull() ?: return@launch
+            _account.value = Load.Done(account)
+            val days = account.expiresAtMs?.let { AccountText.daysLeft(it, System.currentTimeMillis()) } ?: return@launch
+            if (days !in 0..7) return@launch
+            prefs.edit().putLong("remindedDay", today).apply()
+            Toast.makeText(getApplication(), AccountText.reminder(days), Toast.LENGTH_LONG).show()
+        }
+    }
+
     fun closeSeries() {
         _seriesDetail.value = null
     }
@@ -409,6 +448,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun resetCatalogues() {
         generation++
+        _account.value = Load.Idle
         _films.value = Load.Idle
         _series.value = Load.Idle
         _seriesDetail.value = null
@@ -429,3 +469,5 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 }
+
+private const val DAY_MS = 24L * 60 * 60 * 1000

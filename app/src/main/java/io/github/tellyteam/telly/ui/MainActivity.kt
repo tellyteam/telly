@@ -40,6 +40,7 @@ import io.github.tellyteam.telly.ui.live.LiveScreen
 import io.github.tellyteam.telly.ui.settings.SettingsScreen
 import io.github.tellyteam.telly.data.store.LastWatchedStore
 import io.github.tellyteam.telly.data.Series
+import io.github.tellyteam.telly.data.store.CategoryKind
 import io.github.tellyteam.telly.data.store.FavouritesStore
 import io.github.tellyteam.telly.ui.catalog.CatalogScreen
 import io.github.tellyteam.telly.ui.catalog.PosterSpec
@@ -120,6 +121,8 @@ class MainActivity : ComponentActivity() {
         val favourites by container.favourites.keys.collectAsStateWithLifecycle()
         val history by container.lastWatched.history.collectAsStateWithLifecycle()
         val progressVersion by container.watchProgress.changes.collectAsStateWithLifecycle()
+        val arrangement by container.categories.state.collectAsStateWithLifecycle()
+        val account by vm.account.collectAsStateWithLifecycle()
         val progress = container.watchProgress
         val hasVod = s.provider is Provider.Xtream
         val destinations = remember(hasVod) {
@@ -136,7 +139,7 @@ class MainActivity : ComponentActivity() {
         }
         var selected by rememberSaveable { mutableStateOf(Destination.HOME) }
         // Indexes over the whole catalogue, built once off the main thread and shared by pages.
-        val shelves = rememberShelves(s.live, films, series)
+        val shelves = rememberShelves(s.live, films, series, arrangement)
         val actions = remember {
             HomeActions(
                 resume = { entry, index -> play(entry.channels(), index, entry.live, entry.heading, entry.seriesId) },
@@ -208,9 +211,24 @@ class MainActivity : ComponentActivity() {
                     update = update,
                     onCheckForUpdates = { vm.checkForUpdates(manual = true) },
                     onInstallUpdate = vm::installUpdate,
+                    account = account,
+                    onLoadAccount = vm::loadAccount,
+                    categories = remember(s.live, films, series) {
+                        mapOf(
+                            CategoryKind.LIVE to s.live.map { it.name to it.channels.size },
+                            CategoryKind.SERIES to (series as? Load.Done)?.value.orEmpty().map { it.name to it.series.size },
+                            CategoryKind.FILMS to (films as? Load.Done)?.value.orEmpty().map { it.name to it.channels.size },
+                        )
+                    },
+                    categoryPrefs = arrangement,
+                    onTogglePinned = container.categories::togglePinned,
+                    onToggleHidden = container.categories::toggleHidden,
+                    onResetCategories = container.categories::reset,
                 )
                 Destination.SERIES -> {
-                    val groups = remember(series) { series.map { list -> list.map { it.name to it.series } } }
+                    val groups = remember(series, arrangement) {
+                        series.map { list -> container.categories[CategoryKind.SERIES].arrange(list) { it.name }.map { it.name to it.series } }
+                    }
                     CatalogScreen(
                         title = "Series",
                         groups = groups,
@@ -223,7 +241,9 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 Destination.FILMS -> {
-                    val groups = remember(films) { films.map { list -> list.map { it.name to it.channels } } }
+                    val groups = remember(films, arrangement) {
+                        films.map { list -> container.categories[CategoryKind.FILMS].arrange(list) { it.name }.map { it.name to it.channels } }
+                    }
                     CatalogScreen(
                         title = "Films",
                         groups = groups,
@@ -240,7 +260,8 @@ class MainActivity : ComponentActivity() {
                 }
                 else -> LiveScreen(
                     provider = s.provider,
-                    live = s.live,
+                    live = remember(s.live, arrangement) { container.categories[CategoryKind.LIVE].arrange(s.live) { it.name } },
+                    allLive = s.live,
                     favourites = favourites,
                     updating = updating > 0,
                     onPlay = actions.playChannel,
