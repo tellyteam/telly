@@ -38,6 +38,7 @@ import io.github.tellyteam.telly.data.Provider
 import io.github.tellyteam.telly.data.net.CleartextBlockedException
 import io.github.tellyteam.telly.data.store.Aspect
 import io.github.tellyteam.telly.data.store.LastWatchedStore
+import io.github.tellyteam.telly.data.store.SubtitlePreference
 import io.github.tellyteam.telly.data.store.WatchProgressStore
 import io.github.tellyteam.telly.ui.theme.TellyTheme
 import java.util.Locale
@@ -126,6 +127,7 @@ class PlayerActivity : ComponentActivity() {
         val p = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(OkHttpDataSource.Factory(container.http)))
             .build()
+        p.trackSelectionParameters = SubtitlePreference.parameters(p.trackSelectionParameters, container.subtitles.language)
         p.addListener(listener)
         playerView.player = p
         player = p
@@ -450,33 +452,36 @@ class PlayerActivity : ComponentActivity() {
 
     private fun refreshTracks() {
         val p = player ?: return
-        val textOff = C.TRACK_TYPE_TEXT in p.trackSelectionParameters.disabledTrackTypes
         fun options(type: Int) = p.currentTracks.groups.filter { it.type == type }.flatMap { g ->
             (0 until g.length).filter { g.isTrackSupported(it) }.map { i ->
-                TrackOption(
-                    trackLabel(g.getTrackFormat(i), type),
-                    selected = g.isTrackSelected(i) && !(type == C.TRACK_TYPE_TEXT && textOff),
-                ) { selectTrack(g, i, type) }
+                TrackOption(trackLabel(g.getTrackFormat(i), type), selected = g.isTrackSelected(i)) { selectTrack(g, i, type) }
             }
         }
         val audio = options(C.TRACK_TYPE_AUDIO)
         ui.audio = if (audio.size > 1) audio else emptyList()
         val subs = options(C.TRACK_TYPE_TEXT)
-        ui.subtitles = listOf(TrackOption("Off", selected = textOff || subs.none { it.selected }) { disableSubtitles() }) + subs
+        // "Off" can still show forced subtitles (foreign-language lines), as on other services.
+        ui.subtitles = listOf(TrackOption("Off", selected = container.subtitles.language == null) { disableSubtitles() }) + subs
     }
 
     private fun selectTrack(group: Tracks.Group, trackIndex: Int, type: Int) {
         val p = player ?: return
+        if (type == C.TRACK_TYPE_TEXT) {
+            // Remembered for every film and episode from now on.
+            container.subtitles.language = group.getTrackFormat(trackIndex).language?.takeIf { it.isNotBlank() } ?: SubtitlePreference.UNDETERMINED
+        }
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(type, false)
             .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
             .build()
+        refreshTracks()
         resetHide()
     }
 
     private fun disableSubtitles() {
         val p = player ?: return
-        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
+        container.subtitles.language = null
+        p.trackSelectionParameters = SubtitlePreference.parameters(p.trackSelectionParameters, null)
         refreshTracks()
         resetHide()
     }
