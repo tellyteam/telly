@@ -1,6 +1,9 @@
 # Push a tag like v1.2.3 to build, test, sign and publish telly.apk as a GitHub Release.
 # The "latest" download link (https://github.com/tellyteam/telly/releases/latest/download/telly.apk)
 # then always serves the newest version, which is what the Downloader code points at.
+#
+# Actions are pinned to exact commits: this job holds the signing key, and a moved tag must not be
+# able to run new code next to it.
 name: Release
 
 on:
@@ -14,14 +17,14 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: "21"
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
 
       - name: Restore the signing key
         env:
@@ -45,7 +48,11 @@ jobs:
           "$APKSIGNER" verify --print-certs "$APK" | head -3
           cp "$APK" telly.apk
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: telly.apk
           generate_release_notes: true
+
+      - name: Remove the signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/telly-release.jks"
