@@ -109,32 +109,44 @@ fun SettingsScreen(
 
         Section("Updates") {
             Text("You have telly ${BuildConfig.VERSION_NAME}. telly checks for a new version once a week.", fontSize = 13.sp, color = Telly.Muted)
+            val release = when (update) {
+                is UpdateState.Available -> update.release
+                is UpdateState.Downloading -> update.release
+                is UpdateState.NeedsPermission -> update.release
+                is UpdateState.Failed -> update.release
+                else -> null
+            }
             val status = when (update) {
                 UpdateState.Idle -> null
                 UpdateState.Checking -> "Checking…"
                 UpdateState.UpToDate -> "You're up to date."
                 is UpdateState.Available -> "telly ${update.release.version} is available."
                 is UpdateState.Downloading -> "Downloading telly ${update.release.version}… ${(update.progress * 100).toInt()}%"
-                is UpdateState.NeedsPermission -> "Allow telly to install apps (on the screen that opened), then choose Install again."
+                is UpdateState.NeedsPermission -> "Allow telly to install apps (on the screen that opened), then come back and choose Install again."
                 is UpdateState.Failed -> update.message
             }
             status?.let { Text(it, fontSize = 13.sp, color = Telly.Text, modifier = Modifier.padding(top = 4.dp)) }
             (update as? UpdateState.Available)?.release?.notes?.let {
                 Text(it, fontSize = 12.sp, color = Telly.Faint, maxLines = 4, modifier = Modifier.padding(top = 4.dp).width(560.dp))
             }
-            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                val release = when (update) {
-                    is UpdateState.Available -> update.release
-                    is UpdateState.NeedsPermission -> update.release
-                    is UpdateState.Failed -> update.release
-                    else -> null
+            if (release != null) {
+                Text(
+                    "Android then asks you to confirm: choose Install, then Open. Everything you've set up is kept.",
+                    fontSize = 13.sp,
+                    color = Telly.Accent,
+                    modifier = Modifier.padding(top = 4.dp).width(560.dp),
+                )
+            }
+            // One button that stays put and only changes its label, so the remote's focus never
+            // falls out to the menu while checking or downloading.
+            Row(Modifier.padding(top = 12.dp)) {
+                val (label, action) = when {
+                    update is UpdateState.Checking -> "Checking…" to {}
+                    update is UpdateState.Downloading -> "Downloading… ${(update.progress * 100).toInt()}%" to {}
+                    release != null -> "Download and install ${release.version}" to onInstallUpdate
+                    else -> "Check for updates" to onCheckForUpdates
                 }
-                if (release != null) {
-                    PillButton("Download and install ${release.version}", primary = true, onClick = onInstallUpdate)
-                }
-                if (update !is UpdateState.Downloading && update !is UpdateState.Checking) {
-                    PillButton("Check for updates", primary = false, onClick = onCheckForUpdates)
-                }
+                PillButton(label, primary = release != null, onClick = action)
             }
         }
 
