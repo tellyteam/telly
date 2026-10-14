@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.tellyteam.telly.data.DEFAULT_PLAYLIST_NAME
+import io.github.tellyteam.telly.data.DEFAULT_PROVIDER_NAME
 import io.github.tellyteam.telly.data.Provider
 import io.github.tellyteam.telly.ui.theme.TellyWordmark
 import io.github.tellyteam.telly.ui.theme.TvTextField
@@ -98,9 +100,9 @@ fun SetupScreen(
                         val label = name.trim()
                         onConnect(
                             if (useXtream) {
-                                Provider.Xtream(label.ifEmpty { "My provider" }, server.trim(), username.trim(), password, allowCleartext)
+                                Provider.Xtream(label.ifEmpty { DEFAULT_PROVIDER_NAME }, server.trim(), username.trim(), password, allowCleartext)
                             } else {
-                                Provider.M3u(label.ifEmpty { "My playlist" }, url.trim(), allowCleartext)
+                                Provider.M3u(label.ifEmpty { DEFAULT_PLAYLIST_NAME }, url.trim(), allowCleartext)
                             },
                         )
                     },
