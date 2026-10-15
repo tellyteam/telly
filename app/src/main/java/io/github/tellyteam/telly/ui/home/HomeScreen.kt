@@ -1,5 +1,6 @@
 package io.github.tellyteam.telly.ui.home
 
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -160,6 +161,7 @@ fun HomeScreen(
     // Something still to watch, else the last channel: a finished film or series never leads Home.
     val hero = continueItems.firstOrNull()?.first ?: history.firstOrNull { it.live }
 
+    var bannerFocused by rememberSaveable { mutableStateOf(false) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
         item(key = "billboard") {
             if (hero != null) {
@@ -185,6 +187,8 @@ fun HomeScreen(
                     onPrimary = { actions.resume(hero, target) },
                     secondaryLabel = shelves.seriesByName[hero.heading]?.let { "Episodes" },
                     onSecondary = { shelves.seriesByName[hero.heading]?.let(actions.openSeries) },
+                    takeFocus = !bannerFocused,
+                    onTookFocus = { bannerFocused = true },
                 )
             } else {
                 val featured = shelves.recentFilms.firstOrNull() ?: shelves.films.firstOrNull()
@@ -198,6 +202,8 @@ fun HomeScreen(
                     onPrimary = { featured?.let(actions.playFilm) },
                     secondaryLabel = null,
                     onSecondary = {},
+                    takeFocus = !bannerFocused,
+                    onTookFocus = { bannerFocused = true },
                 )
             }
         }
@@ -354,6 +360,9 @@ private fun Billboard(
     onPrimary: () -> Unit,
     secondaryLabel: String?,
     onSecondary: () -> Unit,
+    /** True only the first time Home shows: the banner takes focus then, never again. */
+    takeFocus: Boolean,
+    onTookFocus: () -> Unit,
 ) {
     val primaryFocus = remember { FocusRequester() }
     Box(Modifier.fillMaxWidth().height(286.dp)) {
@@ -387,7 +396,14 @@ private fun Billboard(
             }
         }
     }
-    if (primaryLabel != null) LaunchedEffect(Unit) { runCatching { primaryFocus.requestFocus() } }
+    // Home is a lazy list, so the banner is rebuilt whenever it scrolls back into view. Taking
+    // focus every time pulled focus up out of the rows below (e.g. while moving along My List).
+    if (primaryLabel != null && takeFocus) {
+        LaunchedEffect(Unit) {
+            runCatching { primaryFocus.requestFocus() }
+            onTookFocus()
+        }
+    }
 }
 
 @Composable

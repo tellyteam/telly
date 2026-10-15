@@ -122,6 +122,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Large catalogues are downloaded and parsed one at a time to stay within a TV stick's memory. */
     private val heavy = Mutex()
 
+    /** Saved copies are read one at a time too, but separately, so they never wait behind a download. */
+    private val savedCopies = Mutex()
+
     /** Bumped whenever the provider changes, so late results from the old one are dropped. */
     private var generation = 0
 
@@ -152,11 +155,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         loadJob?.cancel()
         _state.value = UiState.Loading(provider)
         loadJob = viewModelScope.launch {
-            val cached = if (save) null else runCatching { repo.liveGroups(provider, Source.CACHE) }.getOrNull()
-            if (cached != null) _state.value = UiState.Ready(provider, cached)
+            val cached = if (save) null else runCatching { savedCopies.withLock { repo.liveGroups(provider, Source.CACHE) } }.getOrNull()
+            if (cached != null) {
+                _state.value = UiState.Ready(provider, cached)
+                // Saved films and series show straight away too, instead of after the channel download.
+                loadFilms()
+                loadSeries()
+            }
             refreshing {
                 try {
-                    val fresh = repo.liveGroups(provider, Source.NETWORK)!!
+                    val fresh = heavy.withLock { repo.liveGroups(provider, Source.NETWORK)!! }
                     // Only remember a provider once it has actually worked.
                     if (save) container.providerStore.save(provider)
                     if (gen == generation) _state.value = UiState.Ready(provider, fresh)
@@ -417,10 +425,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val gen = generation
         target.value = Load.Loading
         viewModelScope.launch {
+            // The saved copy first (quick), then the provider's latest after any other download.
+            val cached = savedCopies.withLock { if (gen == generation) runCatching { block(provider, Source.CACHE) }.getOrNull() else null }
+            if (cached != null && gen == generation) target.value = Load.Done(cached)
             heavy.withLock {
                 if (gen != generation) return@withLock
-                val cached = runCatching { block(provider, Source.CACHE) }.getOrNull()
-                if (cached != null) target.value = Load.Done(cached)
                 refreshing {
                     val result = try {
                         Load.Done(block(provider, Source.NETWORK)!!)
