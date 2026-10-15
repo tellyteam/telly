@@ -1,5 +1,6 @@
 package io.github.tellyteam.telly.ui.theme
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -16,7 +17,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -114,20 +114,30 @@ fun Modifier.focusRing(shape: Shape = Telly.RowShape): Modifier = composed {
         .border(2.dp, if (focused) Telly.Accent else Color.Transparent, shape)
 }
 
+/** How long focus effects and row scrolling take; shared so they move as one. */
+const val FOCUS_MS = 200
+
 /**
  * Card focus: grows slightly with a soft blue glow, and rests a little dimmed when not focused.
- * Scale and alpha are draw-layer properties, so focus changes never re-measure the grid.
+ * Size, brightness, glow and ring all follow one animated value with the same easing as row
+ * scrolling, so moving between cards glides instead of popping. Everything is a draw-layer
+ * property, so focus changes never re-measure the row.
  */
 fun Modifier.focusCard(shape: Shape = Telly.CardShape, scale: Float = 1.06f): Modifier = composed {
     var focused by remember { mutableStateOf(false) }
-    val s by animateFloatAsState(if (focused) scale else 1f, tween(140), label = "cardScale")
+    val t by animateFloatAsState(if (focused) 1f else 0f, tween(FOCUS_MS, easing = FastOutSlowInEasing), label = "cardFocus")
     this
         .onFocusChanged { focused = it.isFocused }
         .graphicsLayer {
-            scaleX = s
-            scaleY = s
-            alpha = if (focused) 1f else 0.88f
+            val grow = 1f + (scale - 1f) * t
+            scaleX = grow
+            scaleY = grow
+            alpha = 0.88f + 0.12f * t
+            shadowElevation = 18.dp.toPx() * t
+            this.shape = shape
+            clip = false
+            ambientShadowColor = Telly.Accent
+            spotShadowColor = Telly.Accent
         }
-        .shadow(if (focused) 18.dp else 0.dp, shape, ambientColor = Telly.Accent, spotColor = Telly.Accent)
-        .border(2.dp, if (focused) Telly.Accent else Color.Transparent, shape)
+        .border(2.dp, Telly.Accent.copy(alpha = t), shape)
 }

@@ -54,6 +54,7 @@ import io.github.tellyteam.telly.ui.Load
 import io.github.tellyteam.telly.ui.SeriesDetail
 import io.github.tellyteam.telly.ui.components.FadedBackdrop
 import io.github.tellyteam.telly.ui.components.PageInset
+import io.github.tellyteam.telly.ui.components.SmoothRowScrolling
 import io.github.tellyteam.telly.ui.components.keepRightInRow
 import io.github.tellyteam.telly.ui.home.PillButton
 import io.github.tellyteam.telly.ui.theme.Telly
@@ -116,13 +117,15 @@ fun SeriesDetailScreen(
             }
 
             if (shownSeason != null) {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = PageInset),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.padding(top = 18.dp).keepRightInRow(),
-                ) {
-                    itemsIndexed(seasons, key = { _, s -> s.name }) { i, s ->
-                        SeasonChip(s.name, selected = s == shownSeason) { seasonIndex = i }
+                SmoothRowScrolling {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = PageInset),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(top = 18.dp).keepRightInRow(),
+                    ) {
+                        itemsIndexed(seasons, key = { _, s -> s.name }) { i, s ->
+                            SeasonChip(s.name, selected = s == shownSeason) { seasonIndex = i }
+                        }
                     }
                 }
                 val rowState = rememberLazyListState()
@@ -130,15 +133,17 @@ fun SeriesDetailScreen(
                     val i = shownSeason.episodes.indexOfFirst { it.streamUrl == resumeEpisode?.streamUrl }
                     rowState.scrollToItem(i.coerceAtLeast(0))
                 }
-                LazyRow(
-                    state = rowState,
-                    modifier = Modifier.keepRightInRow(),
-                    contentPadding = PaddingValues(horizontal = PageInset, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    itemsIndexed(shownSeason.episodes, key = { _, e -> e.id }) { i, episode ->
-                        val saved = progressVersion.let { progress.get(episode.streamUrl) }
-                        EpisodeCard(episode, saved) { onPlayEpisode(series, shownSeason, i) }
+                SmoothRowScrolling {
+                    LazyRow(
+                        state = rowState,
+                        modifier = Modifier.keepRightInRow(),
+                        contentPadding = PaddingValues(horizontal = PageInset, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        itemsIndexed(shownSeason.episodes, key = { _, e -> e.id }) { i, episode ->
+                            val saved = progressVersion.let { progress.get(episode.streamUrl) }
+                            EpisodeCard(episode, saved) { onPlayEpisode(series, shownSeason, i) }
+                        }
                     }
                 }
             }

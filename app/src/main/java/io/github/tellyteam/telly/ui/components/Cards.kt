@@ -1,5 +1,13 @@
 package io.github.tellyteam.telly.ui.components
 
+import io.github.tellyteam.telly.ui.theme.FOCUS_MS
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.FocusDirection
@@ -79,6 +87,36 @@ fun Modifier.keepRightInRow(): Modifier = this
     .focusProperties { exit = { if (it == FocusDirection.Right) FocusRequester.Cancel else FocusRequester.Default } }
     .focusGroup()
 
+/**
+ * How rows scroll as focus moves: keep about a card's width of room ahead, and glide with the same
+ * timing as the card's focus animation. (The default only scrolled once a card reached the very
+ * edge, by uneven nudges with a springy animation that overlapped the card growing, which read as
+ * a shake.)
+ */
+@OptIn(ExperimentalFoundationApi::class)
+internal class RowScrollSpec(private val leadingPx: Float) : BringIntoViewSpec {
+    @Deprecated("Kept for older Compose versions")
+    override val scrollAnimationSpec: AnimationSpec<Float> = tween(FOCUS_MS, easing = FastOutSlowInEasing)
+
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val roomAhead = containerSize * 0.22f
+        return when {
+            offset < leadingPx -> offset - leadingPx
+            offset + size > containerSize - roomAhead -> offset + size - (containerSize - roomAhead)
+            else -> 0f
+        }
+    }
+}
+
+/** Gives the rows inside it smooth, evenly paced scrolling (see [RowScrollSpec]). */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun SmoothRowScrolling(content: @Composable () -> Unit) {
+    val leading = with(LocalDensity.current) { PageInset.toPx() }
+    val spec = remember(leading) { RowScrollSpec(leading) }
+    CompositionLocalProvider(LocalBringIntoViewSpec provides spec, content = content)
+}
+
 /** A titled, horizontally scrolling row. Only the cards on screen are composed. */
 @Composable
 fun MediaRow(title: String, content: LazyListScope.() -> Unit) {
@@ -90,12 +128,14 @@ fun MediaRow(title: String, content: LazyListScope.() -> Unit) {
             color = Telly.Text,
             modifier = Modifier.padding(start = PageInset, bottom = 2.dp),
         )
-        LazyRow(
-            modifier = Modifier.keepRightInRow(),
-            contentPadding = PaddingValues(horizontal = PageInset, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            content = content,
-        )
+        SmoothRowScrolling {
+            LazyRow(
+                modifier = Modifier.keepRightInRow(),
+                contentPadding = PaddingValues(horizontal = PageInset, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                content = content,
+            )
+        }
     }
 }
 
