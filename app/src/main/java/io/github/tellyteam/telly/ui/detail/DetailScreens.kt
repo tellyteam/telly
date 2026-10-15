@@ -54,6 +54,7 @@ import io.github.tellyteam.telly.ui.Load
 import io.github.tellyteam.telly.ui.SeriesDetail
 import io.github.tellyteam.telly.ui.components.FadedBackdrop
 import io.github.tellyteam.telly.ui.components.PageInset
+import io.github.tellyteam.telly.ui.components.keepRightInRow
 import io.github.tellyteam.telly.ui.home.PillButton
 import io.github.tellyteam.telly.ui.theme.Telly
 import io.github.tellyteam.telly.ui.theme.focusCard
@@ -118,7 +119,7 @@ fun SeriesDetailScreen(
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = PageInset),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.padding(top = 18.dp),
+                    modifier = Modifier.padding(top = 18.dp).keepRightInRow(),
                 ) {
                     itemsIndexed(seasons, key = { _, s -> s.name }) { i, s ->
                         SeasonChip(s.name, selected = s == shownSeason) { seasonIndex = i }
@@ -131,6 +132,7 @@ fun SeriesDetailScreen(
                 }
                 LazyRow(
                     state = rowState,
+                    modifier = Modifier.keepRightInRow(),
                     contentPadding = PaddingValues(horizontal = PageInset, vertical = 14.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {

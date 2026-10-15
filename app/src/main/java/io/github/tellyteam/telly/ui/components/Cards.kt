@@ -1,5 +1,9 @@
 package io.github.tellyteam.telly.ui.components
 
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -65,6 +69,16 @@ fun Modifier.rememberFocus(): Modifier = composed {
 /** Side margin shared by rows and the billboard, so everything lines up. */
 val PageInset = 28.dp
 
+/**
+ * Right never leaves a row: at its end nothing happens, rather than focus jumping to whichever
+ * card in another row happens to be nearest (a lazy row's next card may not exist yet). Left
+ * still leaves, so the first card reaches the menu.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+fun Modifier.keepRightInRow(): Modifier = this
+    .focusProperties { exit = { if (it == FocusDirection.Right) FocusRequester.Cancel else FocusRequester.Default } }
+    .focusGroup()
+
 /** A titled, horizontally scrolling row. Only the cards on screen are composed. */
 @Composable
 fun MediaRow(title: String, content: LazyListScope.() -> Unit) {
@@ -77,6 +91,7 @@ fun MediaRow(title: String, content: LazyListScope.() -> Unit) {
             modifier = Modifier.padding(start = PageInset, bottom = 2.dp),
         )
         LazyRow(
+            modifier = Modifier.keepRightInRow(),
             contentPadding = PaddingValues(horizontal = PageInset, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             content = content,
