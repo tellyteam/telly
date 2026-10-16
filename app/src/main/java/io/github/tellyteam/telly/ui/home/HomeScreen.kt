@@ -157,6 +157,9 @@ fun HomeScreen(
             // A finished film (or a finished last episode) no longer needs continuing.
             if (saved?.finished == true && target == entry.index) null else entry to target
         }
+            // What you actually watched comes first, most recent first; series that came back
+            // with new episodes follow after them. (sortedBy is stable, so each group keeps its order.)
+            .sortedBy { (entry, _) -> entry.newEpisodes }
     }
     // Something still to watch, else the last channel: a finished film or series never leads Home.
     val hero = continueItems.firstOrNull()?.first ?: history.firstOrNull { it.live }

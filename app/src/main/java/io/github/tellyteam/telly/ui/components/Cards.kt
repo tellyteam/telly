@@ -237,16 +237,15 @@ fun LandscapeCard(
             )
             if (progress != null) CardProgress(progress, Modifier.align(Alignment.BottomCenter))
         }
-        if (subtitle != null) {
-            Text(
-                subtitle,
-                fontSize = 12.sp,
-                color = Telly.Muted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 8.dp, start = 2.dp),
-            )
-        }
+        // Always takes its line, so every card in a row is the same height.
+        Text(
+            subtitle ?: " ",
+            fontSize = 12.sp,
+            color = Telly.Muted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 8.dp, start = 2.dp),
+        )
     }
 }
 

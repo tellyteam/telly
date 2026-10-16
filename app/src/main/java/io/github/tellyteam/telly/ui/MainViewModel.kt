@@ -370,7 +370,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     val fresh = NewEpisodes.isNew(show, entry.savedAt)
                     container.lastWatched.save(
                         entry.heading, live = false, season.episodes, index,
-                        seriesId = show.id, newEpisodes = fresh, toFront = fresh,
+                        // Never moved to the front: Continue watching leads with what you last watched.
+                        seriesId = show.id, newEpisodes = fresh, toFront = false,
                     )
                     if (fresh) Toast.makeText(getApplication(), "New episodes of ${entry.heading}", Toast.LENGTH_LONG).show()
                 }

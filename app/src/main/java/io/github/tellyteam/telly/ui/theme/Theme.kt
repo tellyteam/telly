@@ -118,22 +118,19 @@ fun Modifier.focusRing(shape: Shape = Telly.RowShape): Modifier = composed {
 const val FOCUS_MS = 200
 
 /**
- * Card focus: grows slightly with a soft blue glow, and rests a little dimmed when not focused.
- * Size, brightness, glow and ring all follow one animated value with the same easing as row
- * scrolling, so moving between cards glides instead of popping. Everything is a draw-layer
- * property, so focus changes never re-measure the row.
+ * Card focus: a blue ring and soft glow, and full brightness (cards rest a little dimmed). Cards
+ * never change size, so a row keeps exactly the same height and shape as focus moves along it;
+ * scaling the focused card made rows appear to swell and settle on every move. All effects follow
+ * one animated value, with the same timing as row scrolling.
  */
-fun Modifier.focusCard(shape: Shape = Telly.CardShape, scale: Float = 1.06f): Modifier = composed {
+fun Modifier.focusCard(shape: Shape = Telly.CardShape): Modifier = composed {
     var focused by remember { mutableStateOf(false) }
     val t by animateFloatAsState(if (focused) 1f else 0f, tween(FOCUS_MS, easing = FastOutSlowInEasing), label = "cardFocus")
     this
         .onFocusChanged { focused = it.isFocused }
         .graphicsLayer {
-            val grow = 1f + (scale - 1f) * t
-            scaleX = grow
-            scaleY = grow
-            alpha = 0.88f + 0.12f * t
-            shadowElevation = 18.dp.toPx() * t
+            alpha = 0.82f + 0.18f * t
+            shadowElevation = 14.dp.toPx() * t
             this.shape = shape
             clip = false
             ambientShadowColor = Telly.Accent
