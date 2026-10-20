@@ -21,6 +21,11 @@ class SyncSettings(context: Context) {
         prefs.edit().putString(KEY, cipher.encrypt(json.encodeToString(SyncConfig.serializer(), config))).apply()
     }
 
+    /** Sync is hidden until unlocked (seven presses on the version in Settings → About). */
+    var unlocked: Boolean
+        get() = prefs.getBoolean(UNLOCKED, false)
+        set(value) = prefs.edit().putBoolean(UNLOCKED, value).apply()
+
     fun clear() {
         prefs.edit().remove(KEY).apply()
     }
@@ -29,6 +34,7 @@ class SyncSettings(context: Context) {
         /** The relay telly uses unless you run your own (see telly-sync). */
         const val DEFAULT_RELAY = "https://telly-sync.tellyteam.workers.dev"
         private const val KEY = "config"
+        private const val UNLOCKED = "unlocked"
         private val json = Json { ignoreUnknownKeys = true }
     }
 }

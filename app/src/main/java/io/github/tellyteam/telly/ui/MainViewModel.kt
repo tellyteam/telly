@@ -148,6 +148,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _sync = MutableStateFlow(SyncStatus(container.syncSettings.load()))
     val sync: StateFlow<SyncStatus> = _sync
+
+    /** Sync is a hidden feature for now: Settings shows it once unlocked, or while this device is linked. */
+    private val _syncUnlocked = MutableStateFlow(container.syncSettings.unlocked || _sync.value.config != null)
+    val syncUnlocked: StateFlow<Boolean> = _syncUnlocked
     private val syncing = Mutex()
     private var syncSoonJob: Job? = null
 
@@ -446,6 +450,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _sync.value = SyncStatus(error = error)
         }
         return error
+    }
+
+    /** Shows or hides Settings → Sync. Returns whether it's now shown. Hiding never unlinks a linked device. */
+    fun toggleSyncUnlocked(): Boolean {
+        val shown = !_syncUnlocked.value || _sync.value.config != null
+        container.syncSettings.unlocked = shown
+        _syncUnlocked.value = shown
+        return shown
     }
 
     /** Takes this device out of sync: its copy leaves the relay; the other devices keep theirs. */

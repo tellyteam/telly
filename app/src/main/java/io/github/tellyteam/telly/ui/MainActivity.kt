@@ -125,6 +125,7 @@ class MainActivity : ComponentActivity() {
         val arrangement by container.categories.state.collectAsStateWithLifecycle()
         val account by vm.account.collectAsStateWithLifecycle()
         val sync by vm.sync.collectAsStateWithLifecycle()
+        val syncUnlocked by vm.syncUnlocked.collectAsStateWithLifecycle()
         val progress = container.watchProgress
         val hasVod = s.provider is Provider.Xtream
         val destinations = remember(hasVod) {
@@ -227,6 +228,11 @@ class MainActivity : ComponentActivity() {
                     onToggleHidden = container.categories::toggleHidden,
                     onResetCategories = container.categories::reset,
                     sync = sync,
+                    syncUnlocked = syncUnlocked,
+                    onToggleSyncUnlocked = {
+                        val shown = vm.toggleSyncUnlocked()
+                        Toast.makeText(this@MainActivity, if (shown) "Sync is now in Settings" else "Sync hidden", Toast.LENGTH_SHORT).show()
+                    },
                     onStartSync = vm::startSync,
                     onSyncNow = { vm.syncNow(force = true) },
                     onStopSync = vm::stopSync,

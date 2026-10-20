@@ -1,5 +1,7 @@
 package io.github.tellyteam.telly.ui.settings
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +22,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,6 +63,9 @@ fun SettingsScreen(
     onToggleHidden: (CategoryKind, String) -> Unit,
     onResetCategories: (CategoryKind) -> Unit,
     sync: SyncStatus,
+    syncUnlocked: Boolean,
+    /** Seven presses on the version show (or hide) Sync. */
+    onToggleSyncUnlocked: () -> Unit,
     onStartSync: suspend (code: String?, relay: String) -> String?,
     onSyncNow: () -> Unit,
     onStopSync: () -> Unit,
@@ -142,8 +149,10 @@ fun SettingsScreen(
             }
         }
 
-        Section("Sync") {
-            SyncSection(sync, onStartSync, onSyncNow, onStopSync)
+        if (syncUnlocked) {
+            Section("Sync") {
+                SyncSection(sync, onStartSync, onSyncNow, onStopSync)
+            }
         }
 
         Section("Watch progress") {
@@ -244,12 +253,39 @@ fun SettingsScreen(
         }
 
         Section("About") {
-            Text("telly ${BuildConfig.VERSION_NAME}", fontSize = 15.sp, color = Telly.Text)
-            Text("Plays your own IPTV subscription. Talks only to your provider, to GitHub to check for updates and, if you turn on sync, to the sync relay.", fontSize = 13.sp, color = Telly.Muted)
+            VersionLine(onSevenPresses = onToggleSyncUnlocked)
+            Text(
+                "Plays your own IPTV subscription. Talks only to your provider and to GitHub to check for updates" +
+                    if (syncUnlocked) ", and to the sync relay if you turn on sync." else ".",
+                fontSize = 13.sp,
+                color = Telly.Muted,
+            )
             Text("To update: open Downloader and enter code $DOWNLOADER_CODE", fontSize = 13.sp, color = Telly.Muted)
         }
     }
     LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
+}
+
+/** The version, quietly focusable: seven presses in a row toggle the hidden Sync section. */
+@Composable
+private fun VersionLine(onSevenPresses: () -> Unit) {
+    var presses by remember { mutableStateOf(0) }
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(presses) { if (presses > 0) { delay(3_000); presses = 0 } }
+    Text(
+        "telly ${BuildConfig.VERSION_NAME}",
+        fontSize = 15.sp,
+        color = if (focused) Color.White else Telly.Text,
+        modifier = Modifier
+            .onFocusChanged { focused = it.isFocused }
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                presses++
+                if (presses >= 7) {
+                    presses = 0
+                    onSevenPresses()
+                }
+            },
+    )
 }
 
 @Composable
