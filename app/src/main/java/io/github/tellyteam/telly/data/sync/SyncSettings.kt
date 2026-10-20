@@ -27,7 +27,7 @@ class SyncSettings(context: Context) {
 
     companion object {
         /** The relay telly uses unless you run your own (see telly-sync). */
-        const val DEFAULT_RELAY = ""
+        const val DEFAULT_RELAY = "https://telly-sync.tellyteam.workers.dev"
         private const val KEY = "config"
         private val json = Json { ignoreUnknownKeys = true }
     }
