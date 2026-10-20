@@ -20,7 +20,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import io.github.tellyteam.telly.data.sync.SyncCrypto
+import io.github.tellyteam.telly.data.sync.SyncLink
+import io.github.tellyteam.telly.ui.components.QrCode
 import io.github.tellyteam.telly.data.sync.SyncSettings
 import io.github.tellyteam.telly.ui.SyncStatus
 import io.github.tellyteam.telly.ui.home.PillButton
@@ -46,6 +50,19 @@ fun SyncSection(
     var error by remember { mutableStateOf<String?>(null) }
     var confirmStop by remember { mutableStateOf(false) }
     LaunchedEffect(confirmStop) { if (confirmStop) { delay(4_000); confirmStop = false } }
+
+    // Linking or stopping swaps the buttons; put focus on the new ones rather than letting it
+    // fall out to the menu. Not on first showing, when Settings chooses its own first focus.
+    val linkedFocus = remember { FocusRequester() }
+    val unlinkedFocus = remember { FocusRequester() }
+    val linked = status.config != null
+    var wasLinked by remember { mutableStateOf(linked) }
+    LaunchedEffect(linked) {
+        if (linked != wasLinked) {
+            wasLinked = linked
+            runCatching { (if (linked) linkedFocus else unlinkedFocus).requestFocus() }
+        }
+    }
 
     fun link(withCode: String?) {
         linking = true
@@ -74,17 +91,23 @@ fun SyncSection(
         )
         status.error?.let { Text(it, fontSize = 13.sp, color = Telly.Faint) }
         if (showCode) {
-            Text(SyncCrypto.formatCode(config.code), fontSize = 26.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, color = Telly.Text, modifier = Modifier.padding(top = 8.dp))
-            Text(
-                "Enter this code in Settings → Sync on your other devices. Keep it private: anyone with it can see what you've watched.",
-                fontSize = 12.sp,
-                color = Telly.Faint,
-                modifier = Modifier.width(560.dp),
-            )
+            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                QrCode(SyncLink.url(config.code, config.relay), size = 150.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(SyncCrypto.formatCode(config.code), fontSize = 26.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, color = Telly.Text)
+                    Text(
+                        "Scan the QR code with your iPad's camera, or enter the code in Settings → Sync on your other devices. Keep it private: anyone with it can see what you've watched.",
+                        fontSize = 12.sp,
+                        color = Telly.Faint,
+                        modifier = Modifier.width(400.dp),
+                    )
+                }
+            }
         }
         Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            PillButton(if (status.busy) "Syncing…" else "Sync now", primary = false, onClick = { if (!status.busy) onSyncNow() })
-            if (!showCode) PillButton("Show code to link another device", primary = false, onClick = { showCode = true })
+            PillButton(if (status.busy) "Syncing…" else "Sync now", primary = false, onClick = { if (!status.busy) onSyncNow() }, modifier = Modifier.focusRequester(linkedFocus))
+            // Stays put and only changes its label, so focus never falls out to the menu.
+            PillButton(if (showCode) "Hide code" else "Show code to link another device", primary = false, onClick = { showCode = !showCode })
             PillButton(
                 if (confirmStop) "Press again to stop" else "Stop syncing on this device",
                 primary = false,
@@ -102,7 +125,7 @@ fun SyncSection(
     )
     Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            PillButton(if (linking && !joining) "Starting…" else "Start syncing", primary = true, onClick = { if (!linking) link(null) })
+            PillButton(if (linking && !joining) "Starting…" else "Start syncing", primary = true, onClick = { if (!linking) link(null) }, modifier = Modifier.focusRequester(unlinkedFocus))
             PillButton("I have a code", primary = false, onClick = { joining = !joining })
         }
         if (joining) {

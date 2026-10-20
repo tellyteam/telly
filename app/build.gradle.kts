@@ -110,6 +110,8 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    // QR codes for linking sync (encoding only; Apache-2.0)
+    implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
 }
