@@ -3,7 +3,9 @@ package io.github.tellyteam.telly.ui.theme
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +24,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
+import io.github.tellyteam.telly.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -89,17 +93,16 @@ fun TellyTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = colors, shapes = shapes, content = content)
 }
 
-/** The app's name as its logo: white, heavy, slightly tight. */
+/**
+ * The telly wordmark: one drawing shared by every app and icon (brand/telly-wordmark.svg), sized
+ * like text of [fontSize] so callers keep their sizes.
+ */
 @Composable
 fun TellyWordmark(modifier: Modifier = Modifier, fontSize: TextUnit = 28.sp) {
-    Text(
-        "telly",
-        color = Color.White,
-        fontSize = fontSize,
-        fontWeight = FontWeight.Black,
-        letterSpacing = (-0.02 * fontSize.value).sp,
-        maxLines = 1,
-        modifier = modifier,
+    Image(
+        painter = painterResource(R.drawable.telly_wordmark),
+        contentDescription = "telly",
+        modifier = modifier.height((fontSize.value * 0.96f).dp),
     )
 }
 
