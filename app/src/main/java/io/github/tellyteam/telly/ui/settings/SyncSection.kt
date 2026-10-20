@@ -46,7 +46,7 @@ fun SyncSection(
     var code by remember { mutableStateOf("") }
     var relay by remember { mutableStateOf(SyncSettings.DEFAULT_RELAY) }
     var linking by remember { mutableStateOf(false) }
-    var showCode by remember { mutableStateOf(false) }
+    var showCode by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmStop by remember { mutableStateOf(false) }
     LaunchedEffect(confirmStop) { if (confirmStop) { delay(4_000); confirmStop = false } }
@@ -73,7 +73,7 @@ fun SyncSection(
             if (error == null) {
                 joining = false
                 code = ""
-                showCode = withCode == null
+                showCode = true
             }
         }
     }
@@ -111,7 +111,7 @@ fun SyncSection(
             PillButton(
                 if (confirmStop) "Press again to stop" else "Stop syncing on this device",
                 primary = false,
-                onClick = { if (confirmStop) { confirmStop = false; showCode = false; onStop() } else confirmStop = true },
+                onClick = { if (confirmStop) { confirmStop = false; onStop() } else confirmStop = true },
             )
         }
         return
