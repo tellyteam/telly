@@ -27,6 +27,7 @@ import io.github.tellyteam.telly.data.sync.SyncLink
 import io.github.tellyteam.telly.ui.components.QrCode
 import io.github.tellyteam.telly.data.sync.SyncSettings
 import io.github.tellyteam.telly.ui.SyncStatus
+import io.github.tellyteam.telly.ui.detail.ChoiceChip
 import io.github.tellyteam.telly.ui.home.PillButton
 import io.github.tellyteam.telly.ui.theme.Telly
 import io.github.tellyteam.telly.ui.theme.TvTextField
@@ -44,7 +45,8 @@ fun SyncSection(
     val scope = rememberCoroutineScope()
     var joining by remember { mutableStateOf(false) }
     var code by remember { mutableStateOf("") }
-    var relay by remember { mutableStateOf(SyncSettings.DEFAULT_RELAY) }
+    var customRelay by remember { mutableStateOf(false) }
+    var relay by remember { mutableStateOf("https://") }
     var linking by remember { mutableStateOf(false) }
     var showCode by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -68,7 +70,7 @@ fun SyncSection(
         linking = true
         error = null
         scope.launch {
-            error = onStart(withCode, relay)
+            error = onStart(withCode, if (customRelay) relay else SyncSettings.DEFAULT_RELAY)
             linking = false
             if (error == null) {
                 joining = false
@@ -134,7 +136,13 @@ fun SyncSection(
                 PillButton(if (linking) "Linking…" else "Link", primary = true, onClick = { if (!linking && code.isNotBlank()) link(code) })
             }
         }
-        TvTextField("Relay (change only if you run your own)", relay, KeyboardType.Uri, modifier = Modifier.width(560.dp)) { relay = it }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            ChoiceChip("Use telly relay", selected = !customRelay) { customRelay = false }
+            ChoiceChip("Use custom relay", selected = customRelay) { customRelay = true }
+        }
+        if (customRelay) {
+            TvTextField("Your relay's address, e.g. https://sync.example.com", relay, KeyboardType.Uri, modifier = Modifier.width(560.dp)) { relay = it }
+        }
         error?.let { Text(it, fontSize = 13.sp, color = Telly.Accent, modifier = Modifier.width(560.dp)) }
     }
 }

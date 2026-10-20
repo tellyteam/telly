@@ -124,7 +124,7 @@ fun SeriesDetailScreen(
                         modifier = Modifier.padding(top = 18.dp).keepRightInRow(),
                     ) {
                         itemsIndexed(seasons, key = { _, s -> s.name }) { i, s ->
-                            SeasonChip(s.name, selected = s == shownSeason) { seasonIndex = i }
+                            ChoiceChip(s.name, selected = s == shownSeason) { seasonIndex = i }
                         }
                     }
                 }
@@ -247,8 +247,9 @@ private fun Header(
     LaunchedEffect(primary != null) { if (primary != null) runCatching { primaryFocus.requestFocus() } }
 }
 
+/** One of a few choices, e.g. a season or the sync relay; the chosen one is tinted. */
 @Composable
-private fun SeasonChip(label: String, selected: Boolean, onClick: () -> Unit) {
+fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
     var focused by remember { mutableStateOf(false) }
     Box(
         Modifier
