@@ -19,3 +19,4 @@ provider.local.properties
 
 # Local agent and editor settings (they contain machine paths)
 .claude/
+.wrangler/

@@ -13,16 +13,33 @@ class WatchProgressStore(context: Context) {
     /** Bumped on every save so screens can redraw progress bars. */
     val changes: StateFlow<Int> = _changes
 
-    data class Progress(val positionMs: Long, val durationMs: Long) {
+    /** [savedAt] is when it was saved (epoch ms; 0 for older records), so synced devices keep the newest. */
+    data class Progress(val positionMs: Long, val durationMs: Long, val savedAt: Long = 0) {
         val fraction: Float get() = (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
         val finished: Boolean get() = durationMs - positionMs < endMargin(durationMs)
     }
 
     fun get(streamUrl: String): Progress? = prefs.getString(key(streamUrl), null)?.let(::decode)
 
-    fun save(streamUrl: String, positionMs: Long, durationMs: Long) {
+    fun save(streamUrl: String, positionMs: Long, durationMs: Long, now: Long = System.currentTimeMillis()) {
         if (durationMs <= 0) return
-        prefs.edit().putString(key(streamUrl), encode(Progress(positionMs.coerceIn(0, durationMs), durationMs))).apply()
+        prefs.edit().putString(key(streamUrl), encode(Progress(positionMs.coerceIn(0, durationMs), durationMs, now))).apply()
+        _changes.value++
+    }
+
+    /** Everything saved, by key (`series/123.mkv`), for sync. */
+    fun all(): Map<String, Progress> =
+        prefs.all.mapNotNull { (k, v) -> (v as? String)?.let(::decode)?.let { k to it } }.toMap()
+
+    /** Forgets every position. */
+    fun clear() {
+        prefs.edit().clear().apply()
+        _changes.value++
+    }
+
+    /** Sets every position at once, by key, after a sync. */
+    fun replace(all: Map<String, Progress>) {
+        prefs.edit().clear().apply { all.forEach { (k, p) -> putString(k, encode(p)) } }.apply()
         _changes.value++
     }
 
@@ -58,11 +75,15 @@ class WatchProgressStore(context: Context) {
             return if (segments.size >= 4) "${segments[segments.size - 4]}/${segments.last()}" else streamUrl
         }
 
-        internal fun encode(p: Progress) = "${p.positionMs}/${p.durationMs}"
+        internal fun encode(p: Progress) = "${p.positionMs}/${p.durationMs}/${p.savedAt}"
 
         internal fun decode(text: String): Progress? {
-            val (position, duration) = text.split('/').takeIf { it.size >= 2 } ?: return null
-            return Progress(position.toLongOrNull() ?: return null, duration.toLongOrNull() ?: return null)
+            val parts = text.split('/').takeIf { it.size >= 2 } ?: return null
+            return Progress(
+                parts[0].toLongOrNull() ?: return null,
+                parts[1].toLongOrNull() ?: return null,
+                parts.getOrNull(2)?.toLongOrNull() ?: 0,
+            )
         }
     }
 }

@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
                     // Back from the player (or the TV waking up): a finished series may have new episodes.
                     LifecycleResumeEffect(vm) {
                         vm.checkForNewEpisodes()
+                        vm.syncNow()
                         onPauseOrDispose {}
                     }
                     when (val s = state) {
@@ -123,6 +124,7 @@ class MainActivity : ComponentActivity() {
         val progressVersion by container.watchProgress.changes.collectAsStateWithLifecycle()
         val arrangement by container.categories.state.collectAsStateWithLifecycle()
         val account by vm.account.collectAsStateWithLifecycle()
+        val sync by vm.sync.collectAsStateWithLifecycle()
         val progress = container.watchProgress
         val hasVod = s.provider is Provider.Xtream
         val destinations = remember(hasVod) {
@@ -147,9 +149,9 @@ class MainActivity : ComponentActivity() {
                 openFilm = vm::openFilm,
                 playFilm = { film -> play(listOf(film), 0, live = false, heading = LastWatchedStore.FILM) },
                 playChannel = { channels, index -> play(channels, index, live = true, heading = "Live TV") },
-                toggleFavourite = container.favourites::toggle,
+                toggleFavourite = vm::toggleFavourite,
                 removeFromContinue = { entry ->
-                    container.lastWatched.remove(entry.slot)
+                    vm.removeFromContinue(entry.slot)
                     Toast.makeText(this@MainActivity, "Removed from Continue watching", Toast.LENGTH_SHORT).show()
                 },
             )
@@ -165,7 +167,7 @@ class MainActivity : ComponentActivity() {
                         progress = progress,
                         progressVersion = progressVersion,
                         inMyList = FavouritesStore.film(d.film) in favouriteSet,
-                        onToggleMyList = { container.favourites.toggle(FavouritesStore.film(d.film)) },
+                        onToggleMyList = { vm.toggleFavourite(FavouritesStore.film(d.film)) },
                         onPlay = actions.playFilm,
                         onBack = vm::closeFilm,
                     )
@@ -180,7 +182,7 @@ class MainActivity : ComponentActivity() {
                         progress = progress,
                         progressVersion = progressVersion,
                         inMyList = FavouritesStore.series(d.series) in favouriteSet,
-                        onToggleMyList = { container.favourites.toggle(FavouritesStore.series(d.series)) },
+                        onToggleMyList = { vm.toggleFavourite(FavouritesStore.series(d.series)) },
                         onResume = actions.resume,
                         onPlayEpisode = { show, season, index -> play(season.episodes, index, live = false, heading = show.name, seriesId = show.id) },
                         onBack = vm::closeSeries,
@@ -224,6 +226,14 @@ class MainActivity : ComponentActivity() {
                     onTogglePinned = container.categories::togglePinned,
                     onToggleHidden = container.categories::toggleHidden,
                     onResetCategories = container.categories::reset,
+                    sync = sync,
+                    onStartSync = vm::startSync,
+                    onSyncNow = { vm.syncNow(force = true) },
+                    onStopSync = vm::stopSync,
+                    onClearProgress = {
+                        vm.clearProgress()
+                        Toast.makeText(this@MainActivity, "Watch progress cleared", Toast.LENGTH_SHORT).show()
+                    },
                 )
                 Destination.SERIES -> {
                     val groups = remember(series, arrangement) {

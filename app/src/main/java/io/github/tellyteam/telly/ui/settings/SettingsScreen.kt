@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import io.github.tellyteam.telly.BuildConfig
+import io.github.tellyteam.telly.ui.SyncStatus
 import io.github.tellyteam.telly.ui.UpdateState
 import io.github.tellyteam.telly.data.AccountText
 import io.github.tellyteam.telly.data.Provider
@@ -57,6 +58,11 @@ fun SettingsScreen(
     onTogglePinned: (CategoryKind, String) -> Unit,
     onToggleHidden: (CategoryKind, String) -> Unit,
     onResetCategories: (CategoryKind) -> Unit,
+    sync: SyncStatus,
+    onStartSync: suspend (code: String?, relay: String) -> String?,
+    onSyncNow: () -> Unit,
+    onStopSync: () -> Unit,
+    onClearProgress: () -> Unit,
 ) {
     var managing by rememberSaveable { mutableStateOf<CategoryKind?>(null) }
     managing?.let { kind ->
@@ -75,6 +81,8 @@ fun SettingsScreen(
     LaunchedEffect(provider) { if (provider is Provider.Xtream) onLoadAccount() }
     var confirmClear by remember { mutableStateOf(false) }
     var confirmRemove by remember { mutableStateOf(false) }
+    var confirmClearProgress by remember { mutableStateOf(false) }
+    LaunchedEffect(confirmClearProgress) { if (confirmClearProgress) { delay(4_000); confirmClearProgress = false } }
     // A second press within a few seconds confirms; otherwise the button resets.
     LaunchedEffect(confirmClear) { if (confirmClear) { delay(4_000); confirmClear = false } }
     LaunchedEffect(confirmRemove) { if (confirmRemove) { delay(4_000); confirmRemove = false } }
@@ -131,6 +139,34 @@ fun SettingsScreen(
                     ).joinToString(", ")
                     PillButton(if (extra.isEmpty()) kind.label else "${kind.label} · $extra", primary = false, onClick = { managing = kind })
                 }
+            }
+        }
+
+        Section("Sync") {
+            SyncSection(sync, onStartSync, onSyncNow, onStopSync)
+        }
+
+        Section("Watch progress") {
+            Text(
+                "Forget where you got to in every film and episode, and empty Continue watching. My List is kept." +
+                    if (sync.config != null) " Your linked devices are cleared too." else "",
+                fontSize = 13.sp,
+                color = Telly.Muted,
+                modifier = Modifier.width(560.dp),
+            )
+            Row(Modifier.padding(top = 12.dp)) {
+                PillButton(
+                    if (confirmClearProgress) "Press again to clear" else "Clear watch progress",
+                    primary = false,
+                    onClick = {
+                        if (confirmClearProgress) {
+                            confirmClearProgress = false
+                            onClearProgress()
+                        } else {
+                            confirmClearProgress = true
+                        }
+                    },
+                )
             }
         }
 
@@ -209,7 +245,7 @@ fun SettingsScreen(
 
         Section("About") {
             Text("telly ${BuildConfig.VERSION_NAME}", fontSize = 15.sp, color = Telly.Text)
-            Text("Plays your own IPTV subscription. Talks only to your provider.", fontSize = 13.sp, color = Telly.Muted)
+            Text("Plays your own IPTV subscription. Talks only to your provider, to GitHub to check for updates and, if you turn on sync, to the sync relay.", fontSize = 13.sp, color = Telly.Muted)
             Text("To update: open Downloader and enter code $DOWNLOADER_CODE", fontSize = 13.sp, color = Telly.Muted)
         }
     }

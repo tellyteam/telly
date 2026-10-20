@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import io.github.tellyteam.telly.data.Channel
 
@@ -40,6 +42,13 @@ class LastWatchedStore(context: Context) {
     ) {
         val current: Item get() = items[index.coerceIn(items.indices)]
         val isFilm: Boolean get() = !live && heading == FILM
+
+        /** The slot as sync names it: by series id rather than name; null when there's no id. */
+        val syncSlot: String? get() = when {
+            live -> "live"
+            isFilm -> "film:${current.id}"
+            else -> seriesId?.let { "series:$it" }
+        }
 
         /** One history slot per series, per film, and one for live TV. */
         val slot: String get() = when {
@@ -82,10 +91,36 @@ class LastWatchedStore(context: Context) {
         store(LastWatched(heading, live, index, items, id, now, newEpisodes), toFront)
     }
 
+    /** Slot (as sync names it) → when it was taken out of Continue watching, so other devices follow. */
+    var removed: Map<String, Long> = loadRemoved()
+        private set
+
     /** Takes an entry out of Continue watching. */
-    fun remove(slot: String) {
+    fun remove(slot: String, now: Long = System.currentTimeMillis()) {
+        _history.value.firstOrNull { it.slot == slot }?.syncSlot?.let { setRemoved(removed + (it to now)) }
         persist(_history.value.filter { it.slot != slot })
     }
+
+    /** When watch progress was last cleared, here or on a linked device (0 if never). */
+    val cleared: Long get() = prefs.getLong(CLEARED, 0)
+
+    /** Sets the whole history (newest first), the removals and the last clear, after a sync. */
+    fun replace(history: List<LastWatched>, removed: Map<String, Long>, cleared: Long) {
+        setRemoved(removed)
+        prefs.edit().putLong(CLEARED, cleared).apply()
+        persist(history.take(MAX_ENTRIES))
+    }
+
+    /** Empties Continue watching as part of clearing watch progress; linked devices follow. */
+    fun clearProgress(now: Long = System.currentTimeMillis()) = replace(emptyList(), emptyMap(), now)
+
+    private fun setRemoved(updated: Map<String, Long>) {
+        removed = updated
+        prefs.edit().putString(REMOVED, json.encodeToString(removedSerializer, updated)).apply()
+    }
+
+    private fun loadRemoved(): Map<String, Long> =
+        prefs.getString(REMOVED, null)?.let { runCatching { json.decodeFromString(removedSerializer, it) }.getOrNull() }.orEmpty()
 
     /** Newest first; with [toFront] false an existing entry is updated where it is. */
     private fun store(entry: LastWatched, toFront: Boolean = true) {
@@ -121,6 +156,9 @@ class LastWatchedStore(context: Context) {
         const val FILM = "Film"
         private const val KEY = "history"
         private const val OLD_KEY = "last"
+        private const val REMOVED = "removed"
+        private const val CLEARED = "cleared"
+        private val removedSerializer = MapSerializer(String.serializer(), Long.serializer())
         private const val MAX_ENTRIES = 20
         private val json = Json { ignoreUnknownKeys = true }
         private val listSerializer = ListSerializer(LastWatched.serializer())

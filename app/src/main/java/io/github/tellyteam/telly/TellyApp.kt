@@ -19,6 +19,8 @@ import io.github.tellyteam.telly.data.store.FavouritesStore
 import io.github.tellyteam.telly.data.store.LastWatchedStore
 import io.github.tellyteam.telly.data.store.ProviderStore
 import io.github.tellyteam.telly.data.store.WatchProgressStore
+import io.github.tellyteam.telly.data.sync.SyncClient
+import io.github.tellyteam.telly.data.sync.SyncSettings
 import java.io.File
 
 class TellyApp : Application(), ImageLoaderFactory {
@@ -52,6 +54,8 @@ class AppContainer(context: Context) {
     val newEpisodeChecks = NewEpisodeChecks(context)
     val categories = CategoryStore(context)
     val subtitles = SubtitlePreference(context)
+    val syncSettings = SyncSettings(context)
+    val syncClient = SyncClient(http)
 
     /** What the player plays: a live group (for zapping), one film, or a season's episodes (in order). */
     @Volatile

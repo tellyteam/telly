@@ -35,6 +35,13 @@ import io.github.tellyteam.telly.data.Series
 import io.github.tellyteam.telly.data.SeriesGroup
 import io.github.tellyteam.telly.data.Source
 import io.github.tellyteam.telly.data.xtream.XtreamParser
+import io.github.tellyteam.telly.data.store.LastWatchedStore
+import io.github.tellyteam.telly.data.sync.SyncConfig
+import io.github.tellyteam.telly.data.sync.SyncCrypto
+import io.github.tellyteam.telly.data.sync.SyncEntry
+import io.github.tellyteam.telly.data.sync.SyncException
+import io.github.tellyteam.telly.data.sync.SyncLocal
+import kotlinx.coroutines.delay
 import kotlin.coroutines.cancellation.CancellationException
 
 sealed interface UiState {
@@ -71,6 +78,14 @@ data class SeriesDetail(val series: Series, val data: Load<SeriesData>) {
 }
 
 data class FilmDetail(val film: Channel, val details: Load<Details>)
+
+/** Sync for Settings: [config] is null when this device isn't linked. */
+data class SyncStatus(
+    val config: SyncConfig? = null,
+    val busy: Boolean = false,
+    val lastSyncedAt: Long? = null,
+    val error: String? = null,
+)
 
 /** Where the app-update check has got to. */
 sealed interface UpdateState {
@@ -131,10 +146,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** One new-episode check at a time. */
     private val episodeCheck = Mutex()
 
+    private val _sync = MutableStateFlow(SyncStatus(container.syncSettings.load()))
+    val sync: StateFlow<SyncStatus> = _sync
+    private val syncing = Mutex()
+    private var syncSoonJob: Job? = null
+
     init {
         // Weekly, quietly: only says anything if there is a newer version.
         if (container.updates.dueForCheck()) checkForUpdates(manual = false)
-        viewModelScope.launch { _series.collect { if (it is Load.Done) checkForNewEpisodes() } }
+        viewModelScope.launch {
+            _series.collect {
+                if (it !is Load.Done) return@collect
+                checkForNewEpisodes()
+                // Everything a shared entry might point at is loaded now.
+                syncNow()
+            }
+        }
         val saved = container.providerStore.load()
         if (saved != null) connect(saved, save = false) else devProvider()?.let { _state.value = UiState.Setup(it) }
     }
@@ -372,11 +399,144 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         entry.heading, live = false, season.episodes, index,
                         // Never moved to the front: Continue watching leads with what you last watched.
                         seriesId = show.id, newEpisodes = fresh, toFront = false,
+                        // Still "when it was last watched", which orders Continue watching on every synced device.
+                        now = entry.savedAt,
                     )
                     if (fresh) Toast.makeText(getApplication(), "New episodes of ${entry.heading}", Toast.LENGTH_LONG).show()
                 }
             } finally {
                 episodeCheck.unlock()
+            }
+        }
+    }
+
+    // ---- My List, Continue watching and progress (changes here are shared when sync is on) ----
+
+    fun toggleFavourite(key: String) {
+        container.favourites.toggle(key)
+        syncSoon()
+    }
+
+    fun removeFromContinue(slot: String) {
+        container.lastWatched.remove(slot)
+        syncSoon()
+    }
+
+    /** Forgets every position and empties Continue watching (My List stays); linked devices follow. */
+    fun clearProgress() {
+        container.watchProgress.clear()
+        container.lastWatched.clearProgress()
+        syncNow(force = true)
+    }
+
+    // ---- Sync ----
+
+    /** Starts a new household with a fresh code, or joins one with [code]. Returns an error message, or null. */
+    suspend fun startSync(code: String?, relay: String): String? {
+        val normal = if (code == null) SyncCrypto.newCode() else SyncCrypto.normaliseCode(code)
+            ?: return "That code isn't right: it's 16 letters and numbers, like ABCD-EFGH-JKMN-PQRS."
+        val address = relay.trim().trimEnd('/')
+        if (!address.startsWith("https://")) return "The relay address must start with https://"
+        val config = SyncConfig(normal, _sync.value.config?.device ?: SyncCrypto.newDeviceId(), address)
+        container.syncSettings.save(config)
+        _sync.value = SyncStatus(config)
+        val error = runSync(config)
+        if (error != null) {
+            container.syncSettings.clear()
+            _sync.value = SyncStatus(error = error)
+        }
+        return error
+    }
+
+    /** Takes this device out of sync: its copy leaves the relay; the other devices keep theirs. */
+    fun stopSync() {
+        val config = _sync.value.config ?: return
+        container.syncSettings.clear()
+        _sync.value = SyncStatus()
+        viewModelScope.launch {
+            runCatching { container.syncClient.leave(config.relay, SyncCrypto.deriveKeys(config.code), config.device) }
+        }
+    }
+
+    /** After small changes (My List, removals): soon, but once for a burst of them. */
+    private fun syncSoon() {
+        syncSoonJob?.cancel()
+        syncSoonJob = viewModelScope.launch {
+            delay(3_000)
+            syncNow(force = true)
+        }
+    }
+
+    /**
+     * Fetches the other devices' changes, takes in what's newer and shares the result. Runs on
+     * start, when telly comes back to the front (including from the player) and after changes;
+     * never during playback, which happens in another activity.
+     */
+    fun syncNow(force: Boolean = false) {
+        val status = _sync.value
+        val config = status.config ?: return
+        if (!force && System.currentTimeMillis() - (status.lastSyncedAt ?: 0) < SYNC_GAP_MS) return
+        viewModelScope.launch { runSync(config) }
+    }
+
+    private suspend fun runSync(config: SyncConfig): String? {
+        if (!syncing.tryLock()) return null
+        try {
+            _sync.value = _sync.value.copy(busy = true, error = null)
+            val progress = container.watchProgress
+            val history = container.lastWatched
+            val favourites = container.favourites
+            val local = SyncLocal.Local(progress.all(), history.history.value, favourites.keys.value, favourites.changes, history.removed, history.cleared)
+            val now = System.currentTimeMillis()
+            val merged = container.syncClient.syncOnce(config.relay, SyncCrypto.deriveKeys(config.code), config.device, SyncLocal.toParcel(local, now), now)
+            val next = SyncLocal.apply(local, merged, MAX_HISTORY, ::resolve)
+            if (_sync.value.config != config) return null
+            progress.replace(next.progress)
+            history.replace(next.history, next.removed, next.cleared)
+            favourites.replace(next.favourites, next.listChanges)
+            _sync.value = _sync.value.copy(busy = false, lastSyncedAt = System.currentTimeMillis())
+            return null
+        } catch (e: CancellationException) {
+            _sync.value = _sync.value.copy(busy = false)
+            throw e
+        } catch (e: Exception) {
+            val message = (e as? SyncException)?.message ?: "Couldn't sync: ${e.javaClass.simpleName}"
+            _sync.value = _sync.value.copy(busy = false, error = message)
+            return message
+        } finally {
+            syncing.unlock()
+        }
+    }
+
+    /** A shared history entry as one this device can play, from its own lists and login. */
+    private suspend fun resolve(e: SyncEntry): LastWatchedStore.LastWatched? {
+        fun entry(heading: String, live: Boolean, playlist: List<Channel>, index: Int, seriesId: String? = null) =
+            LastWatchedStore.LastWatched(
+                heading, live, index,
+                playlist.map { LastWatchedStore.Item(it.id, it.name, it.group, it.logoUrl, it.streamUrl) },
+                seriesId, e.at,
+            )
+        return when (e.kind) {
+            SyncEntry.Kind.FILM -> {
+                val films = (_films.value as? Load.Done)?.value ?: return null
+                films.firstNotNullOfOrNull { g -> g.channels.firstOrNull { it.id == e.id } }
+                    ?.let { entry(LastWatchedStore.FILM, false, listOf(it), 0) }
+            }
+            SyncEntry.Kind.LIVE -> {
+                val live = (_state.value as? UiState.Ready)?.live ?: return null
+                val group = live.firstOrNull { g -> g.channels.any { it.id == e.id } } ?: return null
+                entry("Live TV", true, group.channels, group.channels.indexOfFirst { it.id == e.id })
+            }
+            SyncEntry.Kind.SERIES -> {
+                val provider = xtream() ?: return null
+                val show = (_series.value as? Load.Done)?.value?.firstNotNullOfOrNull { g -> g.series.firstOrNull { it.id == e.series } }
+                    ?: return null
+                val data = runCatching { repo.seriesData(provider, show, Source.CACHE) }.getOrNull()
+                    ?: runCatching { repo.seriesData(provider, show, Source.NETWORK) }.getOrNull()
+                    ?: return null
+                data.seasons.firstNotNullOfOrNull { season ->
+                    season.episodes.indexOfFirst { it.id == e.id }.takeIf { it >= 0 }?.let { entry(show.name, false, season.episodes, it, show.id) }
+                }
             }
         }
     }
@@ -481,3 +641,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 private const val DAY_MS = 24L * 60 * 60 * 1000
+
+/** Coming back to telly syncs at most this often. */
+private const val SYNC_GAP_MS = 60_000L
+
+/** Continue watching keeps this many entries (as LastWatchedStore does). */
+private const val MAX_HISTORY = 20
