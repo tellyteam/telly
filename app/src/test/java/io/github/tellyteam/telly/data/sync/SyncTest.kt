@@ -73,6 +73,12 @@ class SyncParcelTest {
     }
 
     @Test
+    fun `takes fractional times rather than dropping the entry`() {
+        val p = SyncParcel.parse("""{"v":1,"at":1.6,"progress":{"movie/1.mp4":[5.4,10,3.5]},"history":[],"list":{}}""")!!
+        assertEquals(SyncProgress(5, 10, 4), p.progress["movie/1.mp4"])
+    }
+
+    @Test
     fun `round trips through JSON, as the Mac app writes it`() {
         val p = SyncParcel(
             at = 9,

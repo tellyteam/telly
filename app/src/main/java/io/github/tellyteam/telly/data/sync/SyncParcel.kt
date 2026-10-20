@@ -8,6 +8,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
@@ -88,7 +89,9 @@ data class SyncParcel(
             val raw = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return null
             if ((raw["v"] as? JsonPrimitive)?.longOrNull != 1L) return null
             fun JsonObject?.entries() = this?.entries.orEmpty()
-            fun time(e: Any?) = (e as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull?.takeIf { it >= 0 }
+            // Whole milliseconds, but take fractions from a client that writes them rather than drop the entry.
+            fun time(e: Any?) = (e as? JsonPrimitive)?.takeIf { !it.isString }
+                ?.let { it.longOrNull ?: it.doubleOrNull?.takeIf(Double::isFinite)?.let(Math::round) }?.takeIf { it >= 0 }
 
             val progress = buildMap {
                 (raw["progress"] as? JsonObject).entries().forEach { (k, v) ->
