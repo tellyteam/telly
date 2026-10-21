@@ -1,5 +1,5 @@
 # Push a tag like v1.2.3 to build, test, sign and publish telly.apk as a GitHub Release.
-# The "latest" download link (https://github.com/tellyteam/telly/releases/latest/download/telly.apk)
+# The "latest" download link (https://github.com/tellyteam/telly-android/releases/latest/download/telly.apk)
 # then always serves the newest version, which is what the Downloader code points at.
 #
 # Actions are pinned to exact commits: this job holds the signing key, and a moved tag must not be

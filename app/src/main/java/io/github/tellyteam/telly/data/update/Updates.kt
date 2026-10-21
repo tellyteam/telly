@@ -115,7 +115,7 @@ class UpdateRepository(private val context: Context, private val http: OkHttpCli
     }
 
     private companion object {
-        const val LATEST_URL = "https://api.github.com/repos/tellyteam/telly/releases/latest"
+        const val LATEST_URL = "https://api.github.com/repos/tellyteam/telly-android/releases/latest"
         const val KEY_LAST_CHECK = "lastCheck"
         const val WEEK_MS = 7L * 24 * 60 * 60 * 1000
     }

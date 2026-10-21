@@ -94,7 +94,7 @@ fun TellyTheme(content: @Composable () -> Unit) {
 }
 
 /**
- * The telly wordmark: one drawing shared by every app and icon (brand/telly-wordmark.svg), sized
+ * The telly wordmark: one drawing shared by every app and icon (telly-wordmark.svg in telly-brand), sized
  * like text of [fontSize] so callers keep their sizes.
  */
 @Composable

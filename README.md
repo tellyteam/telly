@@ -1,4 +1,4 @@
-# telly
+# telly for Android TV and Fire TV
 
 A small, fast IPTV player for Fire TV and Android TV. Bring your own provider (Xtream Codes or
 an M3U playlist); telly gives you a clean, remote-friendly way to watch it.
@@ -15,6 +15,9 @@ an M3U playlist); telly gives you a clean, remote-friendly way to watch it.
 
 telly contains no channels or content. You need your own subscription from an IPTV provider.
 
+telly is also on [iPad and Mac](https://github.com/tellyteam/telly-apple) and
+[LG TVs](https://github.com/tellyteam/telly-lg).
+
 ## Install on a Fire TV
 
 1. Install **Downloader** from the Amazon Appstore.
@@ -24,7 +27,7 @@ telly contains no channels or content. You need your own subscription from an IP
 3. Open Downloader and enter the code **`3327748`** (or `aftv.news/3327748`), or this address:
 
    ```
-   https://github.com/tellyteam/telly/releases/latest/download/telly.apk
+   https://github.com/tellyteam/telly-android/releases/latest/download/telly.apk
    ```
 
 4. Choose **Install**, then **Open**. Add your provider and you're watching.
@@ -55,6 +58,8 @@ Requires JDK 17+ and the Android SDK (compileSdk 35).
 ./gradlew testDebugUnitTest   # unit tests
 ./gradlew assembleDebug       # app/build/outputs/apk/debug/app-debug.apk
 ```
+
+The icons, TV banners and splash are drawn by [telly-brand](https://github.com/tellyteam/telly-brand).
 
 For development you can create a git-ignored `provider.local.properties` in the project root
 (`type=xtream`, `name`, `server`, `username`, `password`, or `type=m3u` with `url`) to pre-fill

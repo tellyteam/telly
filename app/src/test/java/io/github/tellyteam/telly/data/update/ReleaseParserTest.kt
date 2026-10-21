@@ -43,13 +43,13 @@ class ReleaseParserTest {
     fun `release notes never show account names`() {
         val generated = """
             ## What's Changed
-            * Live TV: play the focused channel by @someone in https://github.com/tellyteam/telly/pull/4
+            * Live TV: play the focused channel by @someone in https://github.com/tellyteam/telly-android/pull/4
             * Thanks to @helper for testing
 
             ## New Contributors
-            * @someone made their first contribution in https://github.com/tellyteam/telly/pull/1
+            * @someone made their first contribution in https://github.com/tellyteam/telly-android/pull/1
 
-            **Full Changelog**: https://github.com/tellyteam/telly/compare/v1.1.1...v1.2.0
+            **Full Changelog**: https://github.com/tellyteam/telly-android/compare/v1.1.1...v1.2.0
         """.trimIndent()
         val clean = ReleaseParser.cleanNotes(generated)!!
         assertEquals("* Live TV: play the focused channel\n* Thanks to for testing", clean)
