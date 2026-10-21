@@ -14,7 +14,7 @@ class SyncCryptoTest {
     private val keys = SyncCrypto.deriveKeys("0123456789ABCDEF")
     private val nonce = ByteArray(12) { it.toByte() }
 
-    /** The shared vector in telly-sync's PROTOCOL.md; the Mac app's tests pin the same values. */
+    /** The shared vector in telly-sync's PROTOCOL.md; telly-lg's tests pin the same values. */
     @Test
     fun `matches the shared test vector`() {
         assertEquals("964c34622b2ead29bde1300eddb81273", keys.mailbox)
@@ -79,7 +79,7 @@ class SyncParcelTest {
     }
 
     @Test
-    fun `round trips through JSON, as the Mac app writes it`() {
+    fun `round trips through JSON, as the LG app writes it`() {
         val p = SyncParcel(
             at = 9,
             progress = mapOf("series/1.mkv" to SyncProgress(5, 10, 3)),
