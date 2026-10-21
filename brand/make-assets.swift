@@ -86,7 +86,15 @@ func tile(_ w: Int, _ h: Int, markWidth: CGFloat, to path: String) {
 }
 
 // ---- Mac: macOS's icon grid, an 824px rounded tile with a soft shadow ----
-render(1024, 1024, opaque: false, to: "telly-desktop/assets/icon.png") { ctx in
+func macIcon(_ px: Int, to path: String) {
+    render(px, px, opaque: false, to: path) { ctx in
+        let s = CGFloat(px) / 1024
+        ctx.scaleBy(x: s, y: s)
+        drawMacIcon(ctx)
+    }
+}
+
+func drawMacIcon(_ ctx: CGContext) {
     let tileRect = NSRect(x: 100, y: 100, width: 824, height: 824)
     let shape = NSBezierPath(roundedRect: tileRect, xRadius: 185, yRadius: 185)
     NSGraphicsContext.current!.saveGraphicsState()
@@ -98,6 +106,28 @@ render(1024, 1024, opaque: false, to: "telly-desktop/assets/icon.png") { ctx in
     NSGradient(colors: [slateTop, slateBottom])!.draw(in: shape, angle: -60)
     drawMark(ctx, cx: 512, cy: 512, width: 560, bar: true)
 }
+
+macIcon(1024, to: "telly-desktop/assets/icon.png")
+// The native Mac app (built from telly-ipad): every size of the asset catalog's Mac icon.
+let macSet = "telly-ipad/Telly/Assets.xcassets/AppIconMac.appiconset"
+try! FileManager.default.createDirectory(atPath: "\(code)/\(macSet)", withIntermediateDirectories: true)
+var macImages: [String] = []
+for points in [16, 32, 128, 256, 512] {
+    for scale in [1, 2] {
+        let name = "icon_\(points)x\(points)\(scale == 2 ? "@2x" : "").png"
+        macIcon(points * scale, to: "\(macSet)/\(name)")
+        macImages.append(#"{ "filename" : "\#(name)", "idiom" : "mac", "scale" : "\#(scale)x", "size" : "\#(points)x\#(points)" }"#)
+    }
+}
+try! """
+{
+  "images" : [
+    \(macImages.joined(separator: ",\n    "))
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}
+
+""".write(toFile: "\(code)/\(macSet)/Contents.json", atomically: true, encoding: .utf8)
 
 // ---- iPad: full bleed, iPadOS rounds the corners ----
 tile(1024, 1024, markWidth: 680, to: "telly-ipad/Telly/Assets.xcassets/AppIcon.appiconset/icon.png")
