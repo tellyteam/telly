@@ -15,10 +15,19 @@ import io.github.tellyteam.telly.data.Channel
  * so "pick up where you left off" and the Continue watching row reopen them exactly. One entry per
  * series, per film and for live TV. Encrypted, because Xtream stream URLs embed the login.
  */
-class LastWatchedStore(context: Context) {
-    private val prefs = context.getSharedPreferences("last_watched", Context.MODE_PRIVATE)
+class LastWatchedStore(private val context: Context, scope: String? = null) {
+    private var prefs = open(scope)
     private val cipher = KeystoreCipher("telly_last_watched")
     private val _history = MutableStateFlow(load())
+
+    /** Switches to another provider's history. */
+    fun use(scope: String?) {
+        prefs = open(scope)
+        removed = loadRemoved()
+        _history.value = load()
+    }
+
+    private fun open(scope: String?) = context.getSharedPreferences(Scoped.name("last_watched", scope), Context.MODE_PRIVATE)
 
     /** Newest first. */
     val history: StateFlow<List<LastWatched>> = _history

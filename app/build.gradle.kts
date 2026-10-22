@@ -7,10 +7,11 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-// Optional, git-ignored test provider that pre-fills the setup form in debug builds only.
+// Optional, git-ignored test provider that pre-fills the setup form in debug builds only
+// (left out with -PnoDevProvider, for test builds that others may see).
 val devProvider = Properties().apply {
     val file = rootProject.file("provider.local.properties")
-    if (file.isFile) file.reader().use { load(it) }
+    if (file.isFile && !project.hasProperty("noDevProvider")) file.reader().use { load(it) }
 }
 
 // Release signing: from environment variables (GitHub Actions secrets), or locally from

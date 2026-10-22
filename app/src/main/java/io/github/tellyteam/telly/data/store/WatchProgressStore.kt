@@ -6,9 +6,17 @@ import kotlinx.coroutines.flow.StateFlow
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /** Where the user got to in each film and episode, so playback resumes there. */
-class WatchProgressStore(context: Context) {
-    private val prefs = context.getSharedPreferences("watch_progress", Context.MODE_PRIVATE)
+class WatchProgressStore(private val context: Context, scope: String? = null) {
+    private var prefs = open(scope)
     private val _changes = MutableStateFlow(0)
+
+    /** Switches to another provider's positions. */
+    fun use(scope: String?) {
+        prefs = open(scope)
+        _changes.value++
+    }
+
+    private fun open(scope: String?) = context.getSharedPreferences(Scoped.name("watch_progress", scope), Context.MODE_PRIVATE)
 
     /** Bumped on every save so screens can redraw progress bars. */
     val changes: StateFlow<Int> = _changes

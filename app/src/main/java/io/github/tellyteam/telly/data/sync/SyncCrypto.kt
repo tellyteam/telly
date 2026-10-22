@@ -6,7 +6,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-/** Keys and sealing for sync, exactly as telly-sync's PROTOCOL.md (version 1) describes. */
+/** Keys and sealing for sync, exactly as telly-sync's PROTOCOL.md describes. */
 object SyncCrypto {
     private const val ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
     private const val SALT = "telly-sync v1"
@@ -15,7 +15,15 @@ object SyncCrypto {
     private const val TAG_BITS = 128
     private val random = SecureRandom()
 
-    class Keys(val mailbox: String, val key: ByteArray, val auth: String)
+    class Keys(
+        val mailbox: String,
+        val key: ByteArray,
+        val auth: String,
+        /** Keys provider tags (see [providerTag]). */
+        val provider: ByteArray,
+        /** Seals the opt-in logins box (see [sealLogins]). */
+        val logins: ByteArray,
+    )
 
     /** A new link code: 16 characters, 80 random bits. */
     fun newCode(bytes: ByteArray = ByteArray(10).also(random::nextBytes)): String {
@@ -53,30 +61,48 @@ object SyncCrypto {
             mailbox = derive("mailbox").copyOf(16).toHex(),
             key = derive("key"),
             auth = Base64Text.encode(derive("auth"), url = true),
+            provider = derive("provider"),
+            logins = derive("logins"),
         )
     }
 
-    fun seal(keys: Keys, device: String, plaintext: String, nonce: ByteArray = ByteArray(NONCE_BYTES).also(random::nextBytes)): ByteArray {
+    /** A provider's tag: meaningless without the link code; with it, only "same provider or not". */
+    fun providerTag(keys: Keys, identity: String): String = hmac(keys.provider, identity.toByteArray()).copyOf(8).toHex()
+
+    fun seal(keys: Keys, device: String, plaintext: String, nonce: ByteArray = ByteArray(NONCE_BYTES).also(random::nextBytes)): ByteArray =
+        sealBox(keys.key, aad(keys, device), plaintext, nonce)
+
+    /** The plaintext, or null if the parcel isn't ours, was altered, or is from a newer version. */
+    fun open(keys: Keys, device: String, box: ByteArray): String? = openBox(keys.key, aad(keys, device), box)
+
+    /** The opt-in logins box: sealed again, with its own key, inside the (already sealed) parcel. */
+    fun sealLogins(keys: Keys, device: String, plaintext: String, nonce: ByteArray = ByteArray(NONCE_BYTES).also(random::nextBytes)): ByteArray =
+        sealBox(keys.logins, loginsAad(keys, device), plaintext, nonce)
+
+    fun openLogins(keys: Keys, device: String, box: ByteArray): String? = openBox(keys.logins, loginsAad(keys, device), box)
+
+    private fun sealBox(key: ByteArray, aad: ByteArray, plaintext: String, nonce: ByteArray): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
-            init(Cipher.ENCRYPT_MODE, SecretKeySpec(keys.key, "AES"), GCMParameterSpec(TAG_BITS, nonce))
-            updateAAD(aad(keys, device))
+            init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, nonce))
+            updateAAD(aad)
         }
         return byteArrayOf(VERSION) + nonce + cipher.doFinal(plaintext.toByteArray())
     }
 
-    /** The plaintext, or null if the parcel isn't ours, was altered, or is from a newer version. */
-    fun open(keys: Keys, device: String, box: ByteArray): String? {
+    private fun openBox(key: ByteArray, aad: ByteArray, box: ByteArray): String? {
         if (box.size < 1 + NONCE_BYTES + 16 || box[0] != VERSION) return null
         return runCatching {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
-                init(Cipher.DECRYPT_MODE, SecretKeySpec(keys.key, "AES"), GCMParameterSpec(TAG_BITS, box, 1, NONCE_BYTES))
-                updateAAD(aad(keys, device))
+                init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, box, 1, NONCE_BYTES))
+                updateAAD(aad)
             }
             String(cipher.doFinal(box, 1 + NONCE_BYTES, box.size - 1 - NONCE_BYTES))
         }.getOrNull()
     }
 
     private fun aad(keys: Keys, device: String) = "$SALT|${keys.mailbox}|$device".toByteArray()
+
+    private fun loginsAad(keys: Keys, device: String) = "$SALT|logins|${keys.mailbox}|$device".toByteArray()
 
     private fun hmac(key: ByteArray, data: ByteArray): ByteArray =
         Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(key, "HmacSHA256")) }.doFinal(data)

@@ -26,6 +26,11 @@ class SyncSettings(context: Context) {
         get() = prefs.getBoolean(UNLOCKED, false)
         set(value) = prefs.edit().putBoolean(UNLOCKED, value).apply()
 
+    /** Share provider logins with linked devices that do too (opt-in). */
+    var shareLogins: Boolean
+        get() = prefs.getBoolean(SHARE_LOGINS, false)
+        set(value) = prefs.edit().putBoolean(SHARE_LOGINS, value).apply()
+
     fun clear() {
         prefs.edit().remove(KEY).apply()
     }
@@ -35,6 +40,7 @@ class SyncSettings(context: Context) {
         const val DEFAULT_RELAY = "https://telly-sync.tellyteam.workers.dev"
         private const val KEY = "config"
         private const val UNLOCKED = "unlocked"
+        private const val SHARE_LOGINS = "shareLogins"
         private val json = Json { ignoreUnknownKeys = true }
     }
 }

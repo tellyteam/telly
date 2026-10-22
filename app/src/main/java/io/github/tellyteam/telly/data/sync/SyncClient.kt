@@ -17,8 +17,11 @@ class SyncException(message: String) : IOException(message)
 /** Talking to the relay. Only sealed parcels ever leave the device. */
 class SyncClient(private val http: OkHttpClient) {
 
-    /** Every other device's parcel that opens with our key; anything else is ignored. */
-    suspend fun pull(relay: String, keys: SyncCrypto.Keys, device: String): List<SyncParcel> {
+    /**
+     * Every other device's parcel that opens with our key; anything else is ignored. [current] is
+     * the tag a version 1 parcel is read as (null: ignored).
+     */
+    suspend fun pull(relay: String, keys: SyncCrypto.Keys, device: String, current: String?): List<SyncBundle> {
         val text = send(Request.Builder().url("${base(relay)}/v1/${keys.mailbox}").get(), keys)
         val parcels = (Json.parseToJsonElement(text) as? JsonObject)?.get("parcels") as? JsonArray ?: return emptyList()
         return parcels.mapNotNull { element ->
@@ -26,12 +29,12 @@ class SyncClient(private val http: OkHttpClient) {
             val from = (p["device"] as? JsonPrimitive)?.content ?: return@mapNotNull null
             if (from == device) return@mapNotNull null
             val box = (p["body"] as? JsonPrimitive)?.content?.let(Base64Text::decode) ?: return@mapNotNull null
-            SyncCrypto.open(keys, from, box)?.let(SyncParcel::parse)
+            SyncCrypto.open(keys, from, box)?.let { SyncBundle.parse(it, current, keys, from) }
         }
     }
 
-    suspend fun push(relay: String, keys: SyncCrypto.Keys, device: String, parcel: SyncParcel) {
-        val body = SyncCrypto.seal(keys, device, SyncParcel.trim(parcel, parcel.at).toJson())
+    suspend fun push(relay: String, keys: SyncCrypto.Keys, device: String, bundle: SyncBundle) {
+        val body = SyncCrypto.seal(keys, device, bundle.toJson(keys, device))
         send(Request.Builder().url("${base(relay)}/v1/${keys.mailbox}/$device").put(body.toRequestBody(OCTETS)), keys)
     }
 
@@ -41,8 +44,8 @@ class SyncClient(private val http: OkHttpClient) {
     }
 
     /** One round: fetch the others, combine with [own], share the result. Returns the combined state. */
-    suspend fun syncOnce(relay: String, keys: SyncCrypto.Keys, device: String, own: SyncParcel, now: Long): SyncParcel {
-        val merged = SyncParcel.merge(own, pull(relay, keys, device), now)
+    suspend fun syncOnce(relay: String, keys: SyncCrypto.Keys, device: String, own: SyncBundle, current: String?, now: Long): SyncBundle {
+        val merged = SyncBundle.merge(own, pull(relay, keys, device, current), now)
         push(relay, keys, device, merged)
         return merged
     }

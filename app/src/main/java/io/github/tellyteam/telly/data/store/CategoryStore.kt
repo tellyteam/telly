@@ -33,10 +33,18 @@ data class CategoryPrefs(val pinned: List<String> = emptyList(), val hidden: Set
         if (name in hidden) copy(hidden = hidden - name) else CategoryPrefs(pinned - name, hidden + name)
 }
 
-/** How the user arranged Live TV, film and series categories. Kept on this device only. */
-class CategoryStore(context: Context) {
-    private val prefs = context.getSharedPreferences("categories", Context.MODE_PRIVATE)
+/** How the user arranged Live TV, film and series categories, per provider. Kept on this device only. */
+class CategoryStore(private val context: Context, scope: String? = null) {
+    private var prefs = open(scope)
     private val _state = MutableStateFlow(load())
+
+    /** Switches to another provider's arrangement. */
+    fun use(scope: String?) {
+        prefs = open(scope)
+        _state.value = load()
+    }
+
+    private fun open(scope: String?) = context.getSharedPreferences(Scoped.name("categories", scope), Context.MODE_PRIVATE)
     val state: StateFlow<Map<CategoryKind, CategoryPrefs>> = _state
 
     operator fun get(kind: CategoryKind): CategoryPrefs = _state.value[kind] ?: CategoryPrefs()

@@ -35,6 +35,7 @@ import io.github.tellyteam.telly.data.AccountText
 import io.github.tellyteam.telly.data.Provider
 import io.github.tellyteam.telly.data.store.CategoryKind
 import io.github.tellyteam.telly.data.store.CategoryPrefs
+import io.github.tellyteam.telly.data.store.SavedProvider
 import io.github.tellyteam.telly.data.xtream.XtreamParser
 import io.github.tellyteam.telly.ui.Load
 import io.github.tellyteam.telly.ui.components.PageInset
@@ -47,9 +48,14 @@ private const val DOWNLOADER_CODE = "3327748"
 @Composable
 fun SettingsScreen(
     provider: Provider,
-    updating: Boolean,
-    onEditProvider: () -> Unit,
+    providers: List<SavedProvider>,
+    activeId: String?,
+    onSwitchProvider: (String) -> Unit,
+    onAddProvider: () -> Unit,
+    onEditProvider: (SavedProvider) -> Unit,
+    /** Removes the provider in use. */
     onRemoveProvider: () -> Unit,
+    updating: Boolean,
     onClearSavedData: () -> Unit,
     update: UpdateState,
     onCheckForUpdates: () -> Unit,
@@ -67,6 +73,8 @@ fun SettingsScreen(
     /** Seven presses on the version show (or hide) Sync. */
     onToggleSyncUnlocked: () -> Unit,
     onStartSync: suspend (code: String?, relay: String) -> String?,
+    shareLogins: Boolean,
+    onSetShareLogins: (Boolean) -> Unit,
     onSyncNow: () -> Unit,
     onStopSync: () -> Unit,
     onClearProgress: () -> Unit,
@@ -100,7 +108,28 @@ fun SettingsScreen(
     ) {
         Text("Settings", fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = Telly.Text)
 
-        Section("Your provider") {
+        if (providers.size > 1) {
+            Section("Providers") {
+                Text(
+                    "Each provider keeps its own My List, progress and Continue watching.",
+                    fontSize = 13.sp,
+                    color = Telly.Muted,
+                    modifier = Modifier.width(560.dp),
+                )
+                Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    providers.forEach { saved ->
+                        val inUse = saved.id == activeId
+                        PillButton(
+                            if (inUse) "✓ ${saved.provider.name}" else saved.provider.name,
+                            primary = inUse,
+                            onClick = { if (!inUse) onSwitchProvider(saved.id) },
+                        )
+                    }
+                }
+            }
+        }
+
+        Section(if (providers.size > 1) "In use" else "Your provider") {
             Text(provider.name, fontSize = 17.sp, color = Telly.Text)
             Text(
                 when (provider) {
@@ -121,12 +150,18 @@ fun SettingsScreen(
                 }
             }
             Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                PillButton("Edit provider", primary = false, onClick = onEditProvider, modifier = Modifier.focusRequester(firstFocus))
+                PillButton(
+                    "Edit provider",
+                    primary = false,
+                    onClick = { providers.firstOrNull { it.id == activeId }?.let(onEditProvider) },
+                    modifier = Modifier.focusRequester(firstFocus),
+                )
                 PillButton(
                     if (confirmRemove) "Press again to remove" else "Remove provider",
                     primary = false,
                     onClick = { if (confirmRemove) onRemoveProvider() else confirmRemove = true },
                 )
+                PillButton("Add another provider", primary = false, onClick = onAddProvider)
             }
         }
 
@@ -151,7 +186,7 @@ fun SettingsScreen(
 
         if (syncUnlocked) {
             Section("Sync") {
-                SyncSection(sync, onStartSync, onSyncNow, onStopSync)
+                SyncSection(sync, onStartSync, onSyncNow, onStopSync, shareLogins, onSetShareLogins)
             }
         }
 

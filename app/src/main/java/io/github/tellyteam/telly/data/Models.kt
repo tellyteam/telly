@@ -20,6 +20,38 @@ sealed interface Provider {
         val url: String,
         override val allowCleartext: Boolean,
     ) : Provider
+
+    companion object {
+        /** ` Example.com:8080/ ` → `http://example.com:8080`, as the sync protocol defines it. */
+        fun normaliseServer(server: String): String {
+            var s = server.trim().lowercase()
+            if ("://" !in s) s = "http://$s"
+            s = s.trimEnd('/')
+            for ((scheme, port) in listOf("http://" to ":80", "https://" to ":443")) {
+                if (!s.startsWith(scheme)) continue
+                val rest = s.removePrefix(scheme)
+                val host = rest.substringBefore('/')
+                if (host.endsWith(port)) s = scheme + host.removeSuffix(port) + rest.removePrefix(host)
+            }
+            return s.trimEnd('/')
+        }
+    }
+}
+
+/**
+ * Which provider this is, the same on every device and never including the password: the same
+ * server and username (or playlist) is the same provider, whatever it's called. Sync keys each
+ * provider's records by a tag made from this.
+ */
+val Provider.syncIdentity: String
+    get() = when (this) {
+        is Provider.Xtream -> "xtream\n${Provider.normaliseServer(server)}\n$username"
+        is Provider.M3u -> "m3u\n${url.trim()}"
+    }
+
+fun Provider.withAllowCleartext(allow: Boolean): Provider = when (this) {
+    is Provider.Xtream -> copy(allowCleartext = allow)
+    is Provider.M3u -> copy(allowCleartext = allow)
 }
 
 /** Anything the player can play: a live channel, a film or a series episode. */

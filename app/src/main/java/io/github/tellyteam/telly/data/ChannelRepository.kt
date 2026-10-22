@@ -88,6 +88,17 @@ class ChannelRepository(private val http: OkHttpClient, private val cache: Catal
     /** Forgets every saved catalogue; the next load downloads afresh. */
     suspend fun clearSavedCatalogues() = withContext(Dispatchers.IO) { cache.clearAll() }
 
+    /** Forgets one provider's saved catalogues (an M3U playlist holds stream URLs, which can carry the login). */
+    suspend fun clearSavedCatalogues(provider: Provider) = withContext(Dispatchers.IO) {
+        val scope = runCatching {
+            when (provider) {
+                is Provider.Xtream -> CatalogCache.scope("xtream", XtreamParser.serverUrl(provider.server).toString(), provider.username)
+                is Provider.M3u -> CatalogCache.scope("m3u", provider.url.trim().toHttpUrl().toString())
+            }
+        }.getOrNull() ?: return@withContext
+        cache.clear(scope)
+    }
+
     private inner class XtreamSession(private val p: Provider.Xtream, private val source: Source) {
         val server: HttpUrl = XtreamParser.serverUrl(p.server)
         private val scope = CatalogCache.scope("xtream", server.toString(), p.username)

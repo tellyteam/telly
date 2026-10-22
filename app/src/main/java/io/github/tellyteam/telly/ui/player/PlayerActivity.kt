@@ -97,7 +97,7 @@ class PlayerActivity : ComponentActivity() {
         heading = intent.getStringExtra(EXTRA_HEADING) ?: if (live) "Live TV" else LastWatchedStore.FILM
         seriesId = intent.getStringExtra(EXTRA_SERIES_ID)
         index = (savedInstanceState?.getInt(EXTRA_INDEX) ?: intent.getIntExtra(EXTRA_INDEX, 0)).coerceIn(items.indices)
-        provider = runCatching { container.providerStore.load() }.getOrNull()
+        provider = runCatching { container.activeProvider()?.provider }.getOrNull()
         ui.live = live
 
         playerView = PlayerView(this).apply {

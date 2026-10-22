@@ -54,6 +54,7 @@ import io.github.tellyteam.telly.ui.home.rememberShelves
 import io.github.tellyteam.telly.ui.player.PlayerActivity
 import io.github.tellyteam.telly.ui.shell.AppShell
 import io.github.tellyteam.telly.ui.shell.Destination
+import io.github.tellyteam.telly.ui.setup.JoinOptions
 import io.github.tellyteam.telly.ui.setup.SetupScreen
 import io.github.tellyteam.telly.ui.theme.TellyTheme
 import io.github.tellyteam.telly.ui.theme.TellyWordmark
@@ -77,11 +78,22 @@ class MainActivity : ComponentActivity() {
                         onPauseOrDispose {}
                     }
                     when (val s = state) {
-                        is UiState.Setup -> SetupScreen(
-                            existing = s.existing,
-                            onConnect = vm::connect,
-                            onForget = if (s.existing != null) vm::forgetProvider else null,
-                        )
+                        is UiState.Setup -> {
+                            val sync by vm.sync.collectAsStateWithLifecycle()
+                            val syncUnlocked by vm.syncUnlocked.collectAsStateWithLifecycle()
+                            SetupScreen(
+                                existing = s.existing,
+                                onConnect = vm::submitProvider,
+                                onForget = if (s.existing != null) vm::forgetAttempt else null,
+                                join = JoinOptions(
+                                    shown = syncUnlocked,
+                                    linked = sync.config != null,
+                                    onUnlock = { if (!syncUnlocked) vm.toggleSyncUnlocked() },
+                                    onJoin = vm::joinForLogins,
+                                    onStopSync = vm::stopSync,
+                                ),
+                            )
+                        }
                         is UiState.Loading -> Centered {
                             TellyWordmark(fontSize = 64.sp)
                             CircularProgressIndicator()
@@ -93,13 +105,14 @@ class MainActivity : ComponentActivity() {
                             onEdit = { vm.editProvider(s.provider) },
                         )
                         is UiState.Ready -> {
-                            val settingsOpen by vm.settingsOpen.collectAsStateWithLifecycle()
-                            if (settingsOpen) {
+                            val form by vm.form.collectAsStateWithLifecycle()
+                            val open = form
+                            if (open != null) {
                                 SetupScreen(
-                                    existing = s.provider,
-                                    onConnect = vm::connect,
-                                    onForget = vm::forgetProvider,
-                                    onCancel = vm::closeSettings,
+                                    existing = open.editing?.provider,
+                                    onConnect = vm::submitProvider,
+                                    onForget = open.editing?.let { e -> { vm.removeProvider(e.id) } },
+                                    onCancel = vm::closeForm,
                                 )
                             } else {
                                 Browse(vm, s)
@@ -126,6 +139,9 @@ class MainActivity : ComponentActivity() {
         val account by vm.account.collectAsStateWithLifecycle()
         val sync by vm.sync.collectAsStateWithLifecycle()
         val syncUnlocked by vm.syncUnlocked.collectAsStateWithLifecycle()
+        val providers by vm.providers.collectAsStateWithLifecycle()
+        val activeId by vm.activeId.collectAsStateWithLifecycle()
+        val shareLogins by vm.shareLogins.collectAsStateWithLifecycle()
         val progress = container.watchProgress
         val hasVod = s.provider is Provider.Xtream
         val destinations = remember(hasVod) {
@@ -207,9 +223,13 @@ class MainActivity : ComponentActivity() {
                 Destination.MY_LIST -> MyListScreen(shelves, favourites, actions)
                 Destination.SETTINGS -> SettingsScreen(
                     provider = s.provider,
+                    providers = providers,
+                    activeId = activeId,
+                    onSwitchProvider = vm::switchProvider,
+                    onAddProvider = { vm.openForm() },
+                    onEditProvider = { vm.openForm(it) },
+                    onRemoveProvider = { activeId?.let(vm::removeProvider) },
                     updating = updating > 0,
-                    onEditProvider = vm::openSettings,
-                    onRemoveProvider = vm::forgetProvider,
                     onClearSavedData = vm::clearSavedData,
                     update = update,
                     onCheckForUpdates = { vm.checkForUpdates(manual = true) },
@@ -234,6 +254,8 @@ class MainActivity : ComponentActivity() {
                         Toast.makeText(this@MainActivity, if (shown) "Sync is now in Settings" else "Sync hidden", Toast.LENGTH_SHORT).show()
                     },
                     onStartSync = vm::startSync,
+                    shareLogins = shareLogins,
+                    onSetShareLogins = vm::setShareLogins,
                     onSyncNow = { vm.syncNow(force = true) },
                     onStopSync = vm::stopSync,
                     onClearProgress = {

@@ -5,9 +5,13 @@ import io.github.tellyteam.telly.data.store.LastWatchedStore.LastWatched
 import io.github.tellyteam.telly.data.store.WatchProgressStore.Progress
 import io.github.tellyteam.telly.data.sync.SyncCrypto.toHex
 import kotlinx.coroutines.runBlocking
+import io.github.tellyteam.telly.data.Provider
+import io.github.tellyteam.telly.data.syncIdentity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SyncCryptoTest {
@@ -190,5 +194,102 @@ class SyncLocalTest {
         assertEquals(emptyList<LastWatched>(), next.history)
         assertEquals(listOf("film:5"), next.favourites)
         assertEquals(30L, next.cleared)
+    }
+}
+
+/** Version 2: a section per provider, and the opt-in logins. The vectors are PROTOCOL.md's, as the Apple and LG apps pin them. */
+class SyncBundleTest {
+    private val keys = SyncCrypto.deriveKeys("0123456789ABCDEF")
+
+    @Test
+    fun `provider tags match the shared vector`() {
+        assertEquals("http://example.com:8080", Provider.normaliseServer(" Example.com:8080/ "))
+        assertEquals("https://tv.example", Provider.normaliseServer("https://tv.example:443/"))
+        assertEquals("http://tv.example", Provider.normaliseServer("HTTP://tv.example:80"))
+        val xtream = Provider.Xtream("A", " Example.com:8080/ ", "me", "secret", true)
+        val m3u = Provider.M3u("B", " https://example.com/list.m3u ", false)
+        assertEquals("7a6c86b8dde4ea72", SyncCrypto.providerTag(keys, xtream.syncIdentity))
+        assertEquals("ff2163ea5d23fc01", SyncCrypto.providerTag(keys, m3u.syncIdentity))
+        // Never the password, and different codes give unrelated tags.
+        assertFalse("secret" in xtream.syncIdentity)
+        assertNotEquals("7a6c86b8dde4ea72", SyncCrypto.providerTag(SyncCrypto.deriveKeys("1123456789ABCDEF"), xtream.syncIdentity))
+    }
+
+    @Test
+    fun `keeps each provider apart`() {
+        val a = SyncParcel(10, progress = mapOf("movie/1.mkv" to SyncProgress(5, 10, 10)))
+        val b = SyncParcel(10, progress = mapOf("movie/1.mkv" to SyncProgress(7, 10, 20)))
+        val back = SyncBundle.parse(SyncBundle(30, mapOf("aaaaaaaaaaaaaaaa" to a, "bbbbbbbbbbbbbbbb" to b)).toJson(), "cccccccccccccccc")!!
+        assertEquals(5L, back.sections["aaaaaaaaaaaaaaaa"]?.progress?.get("movie/1.mkv")?.positionMs)
+        assertEquals(7L, back.sections["bbbbbbbbbbbbbbbb"]?.progress?.get("movie/1.mkv")?.positionMs)
+        assertNull(back.sections["cccccccccccccccc"])
+        // Anything that isn't a tag is dropped.
+        assertEquals(0, SyncBundle.parse("""{"v":2,"at":1,"providers":{"http://x":{"progress":{}}}}""", "aaaaaaaaaaaaaaaa")?.sections?.size)
+    }
+
+    @Test
+    fun `reads version 1 as the only provider, and not at all with several`() {
+        val v1 = """{"v":1,"at":5,"progress":{"movie/9.mp4":[1,2,5]},"history":[],"list":{},"cleared":0}"""
+        val b = SyncBundle.parse(v1, "dddddddddddddddd")!!
+        assertEquals(setOf("dddddddddddddddd"), b.sections.keys)
+        assertEquals(1L, b.sections["dddddddddddddddd"]?.progress?.get("movie/9.mp4")?.positionMs)
+        assertTrue(SyncBundle.parse(v1, null)!!.sections.isEmpty())
+        assertNull(SyncBundle.parse("""{"v":3}""", "dddddddddddddddd"))
+    }
+
+    @Test
+    fun `merges only the providers this device has`() {
+        val mine = SyncParcel(1, progress = mapOf("movie/1.mkv" to SyncProgress(1, 10, 1)))
+        val theirs = SyncParcel(2, progress = mapOf("movie/1.mkv" to SyncProgress(6, 10, 2)))
+        val other = SyncBundle(2, mapOf("aaaaaaaaaaaaaaaa" to theirs, "eeeeeeeeeeeeeeee" to theirs))
+        val m = SyncBundle.merge(SyncBundle(1, mapOf("aaaaaaaaaaaaaaaa" to mine)), listOf(other), 3)
+        assertEquals(setOf("aaaaaaaaaaaaaaaa"), m.sections.keys)
+        assertEquals(6L, m.sections["aaaaaaaaaaaaaaaa"]?.progress?.get("movie/1.mkv")?.positionMs)
+    }
+
+    @Test
+    fun `logins box matches the shared vector`() {
+        assertEquals("8bef4c523a4e523d49d504c587836e5b804b7fc42d498a2bd59c8a2ecb7dd49f", keys.logins.toHex())
+        val sealed = SyncCrypto.sealLogins(keys, "00112233aabbccdd", "{}", ByteArray(12) { it.toByte() })
+        assertEquals("01000102030405060708090a0bb8e5248c11cad1416ea6d5dfb19164d7d67c", sealed.toHex())
+        assertEquals("{}", SyncCrypto.openLogins(keys, "00112233aabbccdd", sealed))
+        // Not with the parcel key, and not as another device's.
+        assertNull(SyncCrypto.open(keys, "00112233aabbccdd", sealed))
+        assertNull(SyncCrypto.openLogins(keys, "aabbccddeeff0011", sealed))
+    }
+
+    @Test
+    fun `logins travel sealed and come back`() {
+        val home = Provider.Xtream("Home", " Example.com:8080/ ", "me", "pw1", true)
+        val tag = SyncCrypto.providerTag(keys, home.syncIdentity)
+        val gone = "0123456789abcdef"
+        val text = SyncBundle(50, logins = mapOf(tag to SharedLogin(40, home), gone to SharedLogin(30, null))).toJson(keys, "00112233aabbccdd")
+        assertFalse("the password never appears outside the logins box", "pw1" in text)
+        val back = SyncBundle.parse(text, tag, keys, "00112233aabbccdd")!!
+        assertEquals(SharedLogin(40, home), back.logins?.get(tag))
+        assertEquals(SharedLogin(30, null), back.logins?.get(gone))
+        // Without the keys, no logins.
+        assertNull(SyncBundle.parse(text, tag)?.logins)
+    }
+
+    @Test
+    fun `drops a login filed under another tag`() {
+        val wrong = """{"aaaaaaaaaaaaaaaa":{"at":1,"kind":"m3u","name":"x","url":"https://example.com/list.m3u","allowCleartext":false}}"""
+        assertTrue(SharedLogin.parse(wrong, keys).isEmpty())
+        val right = """{"ff2163ea5d23fc01":{"at":1,"kind":"m3u","name":"x","url":"https://example.com/list.m3u","allowCleartext":false}}"""
+        assertEquals(1, SharedLogin.parse(right, keys).size)
+    }
+
+    @Test
+    fun `newest login wins and old removals go`() {
+        val a = Provider.M3u("A", "https://a.example/1.m3u", false)
+        val b = Provider.M3u("A renamed", "https://a.example/1.m3u", false)
+        val own = SyncBundle(10, logins = mapOf("1111111111111111" to SharedLogin(5, a)))
+        val other = SyncBundle(10, logins = mapOf("1111111111111111" to SharedLogin(9, b), "2222222222222222" to SharedLogin(1, null)))
+        val m = SyncBundle.merge(own, listOf(other), 1 + SyncParcel.TOMBSTONE_MS + 1)
+        assertEquals(b, m.logins?.get("1111111111111111")?.provider)
+        assertNull("a removal older than 90 days is forgotten", m.logins?.get("2222222222222222"))
+        // A device that doesn't share logins takes none in.
+        assertNull(SyncBundle.merge(SyncBundle(10), listOf(other), 20).logins)
     }
 }

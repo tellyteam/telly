@@ -45,6 +45,11 @@ class CatalogCache(private val root: File) {
         root.deleteRecursively()
     }
 
+    /** Deletes one provider's saved catalogues. */
+    fun clear(scope: String) {
+        File(root, scope).deleteRecursively()
+    }
+
     fun readText(scope: String, name: String): String? = file(scope, name).takeIf { it.isFile }?.readText()
 
     fun writeText(scope: String, name: String, text: String) {

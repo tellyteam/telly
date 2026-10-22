@@ -18,6 +18,8 @@ import io.github.tellyteam.telly.data.store.SubtitlePreference
 import io.github.tellyteam.telly.data.store.FavouritesStore
 import io.github.tellyteam.telly.data.store.LastWatchedStore
 import io.github.tellyteam.telly.data.store.ProviderStore
+import io.github.tellyteam.telly.data.store.SavedProvider
+import io.github.tellyteam.telly.data.store.Scoped
 import io.github.tellyteam.telly.data.store.WatchProgressStore
 import io.github.tellyteam.telly.data.sync.SyncClient
 import io.github.tellyteam.telly.data.sync.SyncSettings
@@ -43,19 +45,36 @@ class TellyApp : Application(), ImageLoaderFactory {
 class AppContainer(context: Context) {
     val networkPolicy = NetworkPolicy()
     val http = Http.client(networkPolicy)
-    val providerStore = ProviderStore(context)
+    val providerStore = ProviderStore(context).also { store ->
+        // The one provider of earlier versions becomes the first saved one, with its records.
+        store.migrateSingle()?.let { Scoped.move(context, null, it) }
+    }
     val channels = ChannelRepository(http, CatalogCache(File(context.noBackupFilesDir, "catalog")))
-    val watchProgress = WatchProgressStore(context)
-    val favourites = FavouritesStore(context)
-    val lastWatched = LastWatchedStore(context)
+
+    // The provider in use's records; [useProvider] points them at another's.
+    val watchProgress = WatchProgressStore(context, providerStore.activeId)
+    val favourites = FavouritesStore(context, providerStore.activeId)
+    val lastWatched = LastWatchedStore(context, providerStore.activeId)
     val aspects = AspectStore(context)
     val guide = GuideRepository(http)
     val updates = UpdateRepository(context, http)
     val newEpisodeChecks = NewEpisodeChecks(context)
-    val categories = CategoryStore(context)
+    val categories = CategoryStore(context, providerStore.activeId)
     val subtitles = SubtitlePreference(context)
     val syncSettings = SyncSettings(context)
     val syncClient = SyncClient(http)
+
+    /** Makes [id] the provider in use: its My List, progress, history and categories. */
+    fun useProvider(id: String?) {
+        providerStore.activeId = id
+        watchProgress.use(id)
+        favourites.use(id)
+        lastWatched.use(id)
+        categories.use(id)
+    }
+
+    /** The provider in use, as saved. */
+    fun activeProvider(): SavedProvider? = providerStore.activeId?.let { id -> providerStore.loadAll().firstOrNull { it.id == id } }
 
     /** What the player plays: a live group (for zapping), one film, or a season's episodes (in order). */
     @Volatile

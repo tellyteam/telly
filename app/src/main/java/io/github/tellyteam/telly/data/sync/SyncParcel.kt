@@ -33,7 +33,10 @@ data class SyncEntry(
 
 data class SyncProgress(val positionMs: Long, val durationMs: Long, val at: Long)
 
-/** What one device shares (telly-sync PROTOCOL.md): positions, history and My List, by id. */
+/**
+ * One provider's share of what a device syncs (telly-sync PROTOCOL.md): positions, history and
+ * My List, by the provider's own ids. Version 1 parcels were exactly one of these; see [SyncBundle].
+ */
 data class SyncParcel(
     val at: Long = 0,
     val progress: Map<String, SyncProgress> = emptyMap(),
@@ -43,9 +46,10 @@ data class SyncParcel(
     /** When watch progress was last cleared on any device (0 if never): older progress and history are dropped. */
     val cleared: Long = 0,
 ) {
-    fun toJson(): String = buildJsonObject {
-        put("v", 1)
-        put("at", at)
+    /** Version 1's parcel, which is a section with `v` and `at` beside it. */
+    fun toJson(): String = JsonObject(mapOf("v" to JsonPrimitive(1), "at" to JsonPrimitive(at)) + sectionObject()).toString()
+
+    fun sectionObject(): JsonObject = buildJsonObject {
         put("progress", buildJsonObject {
             progress.forEach { (k, p) -> put(k, buildJsonArray { add(JsonPrimitive(p.positionMs)); add(JsonPrimitive(p.durationMs)); add(JsonPrimitive(p.at)) }) }
         })
@@ -64,7 +68,7 @@ data class SyncParcel(
             list.forEach { (k, v) -> put(k, buildJsonArray { add(JsonPrimitive(v.first)); add(JsonPrimitive(v.second)) }) }
         })
         put("cleared", cleared)
-    }.toString()
+    }
 
     companion object {
         const val MAX_PROGRESS = 2000
@@ -84,14 +88,20 @@ data class SyncParcel(
         fun isSyncableKey(key: String) = KEY.matches(key)
         fun isSyncableId(id: String?) = id != null && ID.matches(id)
 
-        /** Whatever another device sent, reduced to well-formed entries; null if it isn't a parcel at all. */
+        /** Whole milliseconds, but take fractions from a client that writes them rather than drop the entry. */
+        internal fun time(e: Any?) = (e as? JsonPrimitive)?.takeIf { !it.isString }
+            ?.let { it.longOrNull ?: it.doubleOrNull?.takeIf(Double::isFinite)?.let(Math::round) }?.takeIf { it >= 0 }
+
+        /** A version 1 parcel, reduced to well-formed entries; null if it isn't one. */
         fun parse(text: String): SyncParcel? {
             val raw = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return null
             if ((raw["v"] as? JsonPrimitive)?.longOrNull != 1L) return null
+            return parseSection(raw, time(raw["at"]) ?: 0)
+        }
+
+        /** A section another device sent, reduced to well-formed entries. */
+        fun parseSection(raw: JsonObject, at: Long): SyncParcel {
             fun JsonObject?.entries() = this?.entries.orEmpty()
-            // Whole milliseconds, but take fractions from a client that writes them rather than drop the entry.
-            fun time(e: Any?) = (e as? JsonPrimitive)?.takeIf { !it.isString }
-                ?.let { it.longOrNull ?: it.doubleOrNull?.takeIf(Double::isFinite)?.let(Math::round) }?.takeIf { it >= 0 }
 
             val progress = buildMap {
                 (raw["progress"] as? JsonObject).entries().forEach { (k, v) ->
@@ -120,7 +130,7 @@ data class SyncParcel(
                     put(k, at to on)
                 }
             }
-            return SyncParcel(time(raw["at"]) ?: 0, progress, history, list, time(raw["cleared"]) ?: 0)
+            return SyncParcel(at, progress, history, list, time(raw["cleared"]) ?: 0)
         }
 
         /** Keeps a parcel within its limits and drops removals older than [TOMBSTONE_MS]. */

@@ -41,6 +41,8 @@ fun SyncSection(
     onStart: suspend (code: String?, relay: String) -> String?,
     onSyncNow: () -> Unit,
     onStop: () -> Unit,
+    shareLogins: Boolean,
+    onSetShareLogins: (Boolean) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var joining by remember { mutableStateOf(false) }
@@ -52,6 +54,9 @@ fun SyncSection(
     var error by remember { mutableStateOf<String?>(null) }
     var confirmStop by remember { mutableStateOf(false) }
     LaunchedEffect(confirmStop) { if (confirmStop) { delay(4_000); confirmStop = false } }
+    var confirmShare by remember { mutableStateOf(false) }
+    // Longer than the others: there's a warning to read first.
+    LaunchedEffect(confirmShare) { if (confirmShare) { delay(15_000); confirmShare = false } }
 
     // Linking or stopping swaps the buttons; put focus on the new ones rather than letting it
     // fall out to the menu. Not on first showing, when Settings chooses its own first focus.
@@ -116,11 +121,43 @@ fun SyncSection(
                 onClick = { if (confirmStop) { confirmStop = false; onStop() } else confirmStop = true },
             )
         }
+        Text(
+            if (shareLogins) "Sharing provider logins: your providers, with their logins, are on your other linked devices that share them too."
+            else "Provider logins aren't shared: sign in on each device, or share them so your other devices get your providers.",
+            fontSize = 13.sp,
+            color = Telly.Muted,
+            modifier = Modifier.padding(top = 16.dp).width(560.dp),
+        )
+        if (confirmShare) {
+            Text(
+                "Your providers' addresses, usernames and passwords go to your other linked devices that have this on, and they get theirs. They're end-to-end encrypted: the relay can't read them, but anyone with your sync code could. Adding, changing or removing a provider then does the same on those devices, including removing what was watched with it.",
+                fontSize = 13.sp,
+                color = Telly.Accent,
+                modifier = Modifier.padding(top = 4.dp).width(560.dp),
+            )
+        }
+        Row(Modifier.padding(top = 8.dp)) {
+            PillButton(
+                when {
+                    shareLogins -> "Stop sharing provider logins"
+                    confirmShare -> "Press again to share them"
+                    else -> "Share provider logins"
+                },
+                primary = false,
+                onClick = {
+                    when {
+                        shareLogins -> onSetShareLogins(false)
+                        confirmShare -> { confirmShare = false; onSetShareLogins(true) }
+                        else -> confirmShare = true
+                    }
+                },
+            )
+        }
         return
     }
 
     Text(
-        "Pick up where you left off on your other devices. Shares progress, Continue watching and My List, end-to-end encrypted. Your provider login is never shared: sign in on each device.",
+        "Pick up where you left off on your other devices. Shares progress, Continue watching and My List, end-to-end encrypted. Provider logins aren't shared unless you turn that on.",
         fontSize = 13.sp,
         color = Telly.Muted,
         modifier = Modifier.width(560.dp),
