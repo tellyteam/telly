@@ -81,4 +81,4 @@ existing installs can't update.
 
 ## Licence
 
-telly is free software, licensed under the [GNU General Public License v3.0](LICENSE).
+telly is free for personal, non-commercial use under the [PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use, including selling telly or bundling it with a paid service, needs permission: ask through GitHub.
