@@ -24,6 +24,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +33,7 @@ import io.github.tellyteam.telly.BuildConfig
 import io.github.tellyteam.telly.ui.SyncStatus
 import io.github.tellyteam.telly.ui.UpdateState
 import io.github.tellyteam.telly.data.AccountText
+import io.github.tellyteam.telly.data.PlaybackSettings
 import io.github.tellyteam.telly.data.Provider
 import io.github.tellyteam.telly.data.store.CategoryKind
 import io.github.tellyteam.telly.data.store.CategoryPrefs
@@ -162,6 +164,25 @@ fun SettingsScreen(
                     onClick = { if (confirmRemove) onRemoveProvider() else confirmRemove = true },
                 )
                 PillButton("Add another provider", primary = false, onClick = onAddProvider)
+            }
+        }
+
+        Section("Playback") {
+            val context = LocalContext.current
+            val playback = remember { PlaybackSettings(context) }
+            var autoNext by remember { mutableStateOf(playback.autoNext) }
+            Text(
+                "In the last minute of an episode, a small prompt counts down to the next one: OK plays it now, Back cancels it.",
+                fontSize = 13.sp,
+                color = Telly.Muted,
+                modifier = Modifier.width(560.dp),
+            )
+            Row(Modifier.padding(top = 12.dp)) {
+                PillButton(
+                    if (autoNext) "Play the next episode automatically: On" else "Play the next episode automatically: Off",
+                    primary = false,
+                    onClick = { autoNext = !autoNext; playback.autoNext = autoNext },
+                )
             }
         }
 

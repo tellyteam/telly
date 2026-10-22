@@ -34,6 +34,8 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import io.github.tellyteam.telly.container
 import io.github.tellyteam.telly.data.Channel
+import io.github.tellyteam.telly.data.PlaybackRules
+import io.github.tellyteam.telly.data.PlaybackSettings
 import io.github.tellyteam.telly.data.Provider
 import io.github.tellyteam.telly.data.net.CleartextBlockedException
 import io.github.tellyteam.telly.data.store.Aspect
@@ -73,6 +75,10 @@ class PlayerActivity : ComponentActivity() {
     private var swallowKeyUp: Int? = null
 
     /** Last known position of the current film or episode, kept for when it changes under us. */
+    /** Back hid the next-episode prompt for this item: no autoplay at its end either. */
+    private var promptDismissed = false
+    private val playbackSettings by lazy { PlaybackSettings(this) }
+
     private var lastPositionMs = 0L
     private var lastDurationMs = C.TIME_UNSET
 
@@ -244,6 +250,14 @@ class PlayerActivity : ComponentActivity() {
                     if (ui.nextPromptSecs != null) playNext() else showOverlay()
                     true
                 }
+                KeyEvent.KEYCODE_BACK -> {
+                    if (ui.nextPromptSecs == null) return false // Back leaves the player
+                    // Back hides the prompt, and this item then stops at its end.
+                    promptDismissed = true
+                    ui.nextPromptSecs = null
+                    updateAutoAdvance()
+                    true
+                }
                 KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
                     if (!live) {
                         val stepMs = if (repeat > 4) 30_000L else 10_000L
@@ -330,8 +344,15 @@ class PlayerActivity : ComponentActivity() {
         }
         ui.nextTitle = if (!live) items.getOrNull(index + 1)?.name else null
         ui.nextPromptSecs = null
+        promptDismissed = false
+        updateAutoAdvance()
         container.lastWatched.save(heading, live, items, index, seriesId)
         loadAspect()
+    }
+
+    /** Plays on into the next item only as PLAYBACK.md says; otherwise stops on this one's last frame. */
+    private fun updateAutoAdvance() {
+        player?.pauseAtEndOfMediaItems = !live && !PlaybackRules.advanceAtEnd(true, playbackSettings.autoNext, promptDismissed)
     }
 
     private fun playNext() {
@@ -365,10 +386,9 @@ class PlayerActivity : ComponentActivity() {
                     lastDurationMs = p.duration
                 }
                 if (ui.overlay) refreshPosition()
-                val remaining = if (p.duration == C.TIME_UNSET) Long.MAX_VALUE else p.duration - p.currentPosition
-                val prompt = !live && p.hasNextMediaItem() && p.playbackState == Player.STATE_READY &&
-                    remaining in 1..WatchProgressStore.END_MARGIN_MS
-                ui.nextPromptSecs = if (prompt) ((remaining + 999) / 1000).toInt() else null
+                ui.nextPromptSecs = if (p.duration == C.TIME_UNSET || p.playbackState != Player.STATE_READY) null else PlaybackRules.promptSeconds(
+                    p.duration, p.currentPosition, p.hasNextMediaItem(), playbackSettings.autoNext, promptDismissed, live,
+                )
             }
             if (++ticks % 20 == 0) saveProgress()
             handler.postDelayed(this, 500)
@@ -382,6 +402,11 @@ class PlayerActivity : ComponentActivity() {
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             ui.playing = playWhenReady
+            if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
+                // Stopped at the end instead of playing on: it's watched; the controls offer what's next.
+                player?.let { p -> if (p.duration != C.TIME_UNSET) progress.markFinished(items[p.currentMediaItemIndex].streamUrl, p.duration) }
+                showOverlay()
+            }
             updateKeepAwake()
         }
 

@@ -9,6 +9,7 @@ import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import io.github.tellyteam.telly.data.Channel
+import io.github.tellyteam.telly.data.PlaybackRules
 
 /**
  * Recently watched things, newest first, each with its whole playlist (a live group or a season)
@@ -72,8 +73,8 @@ class LastWatchedStore(private val context: Context, scope: String? = null) {
          */
         fun continueIndex(progress: WatchProgressStore): Int {
             val i = index.coerceIn(items.indices)
-            if (live || i + 1 >= items.size) return i
-            return if (progress.get(items[i].streamUrl)?.finished == true) i + 1 else i
+            if (live) return i
+            return PlaybackRules.continueIndex(i, items.size) { progress.get(items[it].streamUrl)?.finished == true }
         }
 
         fun channels(): List<Channel> = items.map { Channel(it.id, it.name, it.group, it.logoUrl, it.streamUrl) }

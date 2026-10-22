@@ -32,7 +32,5 @@ class WatchProgressStoreTest {
         // 45 minutes: the last 5% is 2 min 15 s, so stopping 2 minutes from the end is watched.
         assertTrue(WatchProgressStore.Progress(2_580_000, 2_700_000).finished)
         assertFalse(WatchProgressStore.Progress(2_560_000, 2_700_000).finished)
-        assertEquals(135_000L, WatchProgressStore.endMargin(2_700_000))
-        assertEquals(60_000L, WatchProgressStore.endMargin(600_000))
     }
 }

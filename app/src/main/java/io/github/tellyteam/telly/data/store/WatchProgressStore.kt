@@ -3,6 +3,7 @@ package io.github.tellyteam.telly.data.store
 import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import io.github.tellyteam.telly.data.PlaybackRules
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /** Where the user got to in each film and episode, so playback resumes there. */
@@ -24,7 +25,7 @@ class WatchProgressStore(private val context: Context, scope: String? = null) {
     /** [savedAt] is when it was saved (epoch ms; 0 for older records), so synced devices keep the newest. */
     data class Progress(val positionMs: Long, val durationMs: Long, val savedAt: Long = 0) {
         val fraction: Float get() = (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
-        val finished: Boolean get() = durationMs - positionMs < endMargin(durationMs)
+        val finished: Boolean get() = PlaybackRules.watched(positionMs, durationMs)
     }
 
     fun get(streamUrl: String): Progress? = prefs.getString(key(streamUrl), null)?.let(::decode)
@@ -54,26 +55,9 @@ class WatchProgressStore(private val context: Context, scope: String? = null) {
     fun markFinished(streamUrl: String, durationMs: Long) = save(streamUrl, durationMs, durationMs)
 
     /** Where to start: the saved position, unless barely started or already finished. */
-    fun resumePosition(streamUrl: String): Long {
-        val p = get(streamUrl) ?: return 0
-        return if (p.positionMs < MIN_RESUME_MS || p.finished) 0 else p.positionMs
-    }
+    fun resumePosition(streamUrl: String): Long = get(streamUrl).let { PlaybackRules.startAt(it?.positionMs, it?.durationMs) }
 
     companion object {
-        /**
-         * The "next episode" prompt shows in the last minute. Streaming credits typically run
-         * 60–90 s, broadcast 20–40 s.
-         */
-        const val END_MARGIN_MS = 60_000L
-
-        /**
-         * How close to the end counts as watched: the last minute, or the last 5% when that's longer.
-         * Long episodes often run two or three minutes of credits (a 45-minute episode: 2¼ minutes).
-         */
-        fun endMargin(durationMs: Long): Long = maxOf(END_MARGIN_MS, durationMs / 20)
-
-        private const val MIN_RESUME_MS = 15_000L
-
         /**
          * Xtream stream URLs embed the username and password (`/series/user/pass/123.mkv`), so the
          * key keeps only the kind and file name: `series/123.mkv`.
